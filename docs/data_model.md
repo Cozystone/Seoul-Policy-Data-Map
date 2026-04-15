@@ -34,3 +34,12 @@
 - `crowding.level`, `crowding.message`, `crowding.score`: citizen-readable crowding state and normalized score.
 - `weather.temperatureC`, `weather.condition`, `weather.pm10`: weather indicators.
 - `mobility.roadTrafficLevel`, `mobility.roadTrafficScore`, `mobility.subwayLine`: mobility indicators.
+
+## Simulation Run Result
+
+- `runId`: unique execution id.
+- `scenarioId`: scenario used by the run.
+- `createdAt`: execution timestamp.
+- `signals`: pressure, acceptance, risk, and confidence.
+- `verdict`: grade, headline, summary, and mitigation.
+- `reaction`: support, concern, opposition, and neutral scores.

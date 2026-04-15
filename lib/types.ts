@@ -44,3 +44,32 @@ export type SeoulRealtimeSnapshot = {
   };
   raw?: unknown;
 };
+
+export type SimulationRunRequest = {
+  scenario: Scenario;
+  realtime: SeoulRealtimeSnapshot | null;
+};
+
+export type SimulationRunResult = {
+  runId: string;
+  scenarioId: string;
+  createdAt: string;
+  signals: {
+    pressure: number;
+    acceptance: number;
+    risk: number;
+    confidence: number;
+  };
+  verdict: {
+    grade: string;
+    headline: string;
+    summary: string;
+    mitigation: string;
+  };
+  reaction: {
+    support: number;
+    concern: number;
+    opposition: number;
+    neutral: number;
+  };
+};

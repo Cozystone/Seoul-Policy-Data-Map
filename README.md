@@ -7,6 +7,7 @@ This repository was created from the local SPDM prompt and mockup assets in this
 ## Features
 
 - Policy Composer for selecting sample Seoul policy scenarios
+- Simulation Run API that returns a run id, verdict grade, reaction scores, and confidence
 - Situation Signals for current crowding, acceptance, risk, and evidence strength
 - Impact Graph showing policy-to-region-to-reaction causal paths
 - Reaction River for support, concern, opposition, and neutral stance movement
@@ -43,6 +44,23 @@ Create `.env.local` from `.env.example` and set:
 ```bash
 SEOUL_OPEN_API_KEY="your-seoul-open-api-key"
 ```
+
+## Simulation Execution
+
+The `시뮬레이션 실행` button calls:
+
+```bash
+POST /api/simulation/run
+```
+
+The API combines the selected policy scenario with the current Seoul realtime/fallback snapshot and returns:
+
+- `runId`
+- execution timestamp
+- pressure, acceptance, risk, and confidence scores
+- verdict grade
+- support, concern, opposition, and neutral reaction scores
+- recommended mitigation summary
 
 ## Build
 

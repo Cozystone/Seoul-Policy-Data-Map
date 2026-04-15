@@ -7,7 +7,9 @@ SPDM is currently a frontend-first prototype. The first deployable slice focuses
 - Next.js renders the dashboard.
 - React state selects one of three sample scenarios.
 - `app/api/seoul/realtime/route.ts` calls the Seoul real-time city data adapter.
+- `app/api/simulation/run/route.ts` executes a deterministic policy rehearsal run.
 - `lib/seoul-realtime.ts` normalizes crowding, weather, and traffic signals, and falls back to sample data when `SEOUL_OPEN_API_KEY` is not configured or an upstream call fails.
+- `lib/simulation.ts` combines scenario parameters and city signals into run scores, verdict grades, reaction scores, and mitigation text.
 - Derived metrics are calculated in `app/page.tsx` from scenario controls and the current city snapshot.
 - Recharts renders the Reaction River.
 - SVG and CSS render the Impact Graph and Persona Cluster.
@@ -38,3 +40,7 @@ The adapter expects the Seoul Open API citydata endpoint shape:
 `http://openapi.seoul.go.kr:8088/{SEOUL_OPEN_API_KEY}/json/citydata/1/5/{AREA_NM}`
 
 The citydata API returns one area per call. Production polling should queue target areas, store raw responses, normalize metrics, and expose last-success timestamps per area.
+
+## Simulation Run Notes
+
+The current simulation is deterministic and explainable. It is not a predictive model. It uses policy intensity, disruption, benefit clarity, persona sensitivity, evidence strength, novelty, and the latest city signal snapshot to produce a rehearsal verdict. This gives a working execution path now while leaving room for a future agent-based simulator or graph model.

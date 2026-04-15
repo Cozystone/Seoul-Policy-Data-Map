@@ -226,6 +226,31 @@ a {
   font-weight: 700;
 }
 
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.run-receipt {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  border: 1px solid rgba(96, 206, 133, 0.45);
+  border-radius: 7px;
+  padding: 10px;
+  background: rgba(96, 206, 133, 0.08);
+}
+
+.run-receipt strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.run-receipt span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .secondary-button {
   display: inline-flex;
   align-items: center;

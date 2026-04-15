@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 import { scenarios, signalBase } from "@/lib/sample-data";
-import type { Scenario, SeoulRealtimeSnapshot } from "@/lib/types";
+import type { Scenario, SeoulRealtimeSnapshot, SimulationRunResult } from "@/lib/types";
 
 const colors = {
   blue: "#49b8e8",
@@ -72,10 +72,16 @@ function makeRiver(scenario: Scenario) {
 
 function ScenarioComposer({
   active,
-  onSelect
+  onSelect,
+  onRun,
+  isRunning,
+  runResult
 }: {
   active: Scenario;
   onSelect: (scenario: Scenario) => void;
+  onRun: () => void;
+  isRunning: boolean;
+  runResult: SimulationRunResult | null;
 }) {
   return (
     <section className="panel">
@@ -115,10 +121,17 @@ function ScenarioComposer({
           <label>정책 목표</label>
           <textarea value={active.objective} readOnly />
         </div>
-        <button className="primary-button">
+        <button className="primary-button" onClick={onRun} disabled={isRunning}>
           <Play size={18} />
-          시뮬레이션 실행
+          {isRunning ? "시뮬레이션 실행 중" : "시뮬레이션 실행"}
         </button>
+        {runResult ? (
+          <div className="run-receipt">
+            <strong>{runResult.verdict.headline}</strong>
+            <span>Run ID {runResult.runId}</span>
+            <span>{new Date(runResult.createdAt).toLocaleString("ko-KR")}</span>
+          </div>
+        ) : null}
         <div className="scenario-list">
           {scenarios.map((scenario) => (
             <button
@@ -365,7 +378,13 @@ function PersonaCluster({ scenario }: { scenario: Scenario }) {
   );
 }
 
-function VerdictPanel({ scenario }: { scenario: Scenario }) {
+function VerdictPanel({
+  scenario,
+  runResult
+}: {
+  scenario: Scenario;
+  runResult: SimulationRunResult | null;
+}) {
   return (
     <section className="panel">
       <div className="panel-header">
@@ -381,21 +400,29 @@ function VerdictPanel({ scenario }: { scenario: Scenario }) {
             <Landmark size={16} color={colors.green} />
             예상 정책 효과
           </h3>
-          <p>{scenario.effect}</p>
+          <p>{runResult ? runResult.verdict.summary : scenario.effect}</p>
         </div>
         <div className="verdict-card">
           <h3>
             <Activity size={16} color={colors.red} />
             부작용과 반대 가능성
           </h3>
-          <p>{scenario.sideEffect}</p>
+          <p>
+            {runResult
+              ? `반대 ${runResult.reaction.opposition}, 우려 ${runResult.reaction.concern}, 수용성 ${runResult.signals.acceptance}.`
+              : scenario.sideEffect}
+          </p>
         </div>
         <div className="verdict-card">
           <h3>
             <Database size={16} color={colors.blue} />
             데이터 근거
           </h3>
-          <p>{scenario.evidence}</p>
+          <p>
+            {runResult
+              ? `${scenario.evidence} 실행 결과의 신뢰도는 ${runResult.signals.confidence}입니다.`
+              : scenario.evidence}
+          </p>
         </div>
       </div>
       <div className="confidence">
@@ -417,6 +444,8 @@ function VerdictPanel({ scenario }: { scenario: Scenario }) {
 export default function Home() {
   const [active, setActive] = useState<Scenario>(scenarios[0]);
   const [realtime, setRealtime] = useState<SeoulRealtimeSnapshot | null>(null);
+  const [runResult, setRunResult] = useState<SimulationRunResult | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -437,6 +466,36 @@ export default function Home() {
     return () => controller.abort();
   }, [active.realtimeArea]);
 
+  useEffect(() => {
+    setRunResult(null);
+  }, [active.id]);
+
+  async function runSimulation() {
+    setIsRunning(true);
+
+    try {
+      const response = await fetch("/api/simulation/run", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          scenario: active,
+          realtime
+        })
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const result = (await response.json()) as SimulationRunResult;
+      setRunResult(result);
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -456,11 +515,18 @@ export default function Home() {
             {realtime ? `Updated ${realtime.updatedAt}` : "Loading city signal"}
           </span>
           <span className="status-pill">Active scenario: {active.shortName}</span>
+          {runResult ? <span className="status-pill">Run: {runResult.verdict.grade}</span> : null}
         </div>
       </header>
 
       <div className="workspace-grid">
-        <ScenarioComposer active={active} onSelect={setActive} />
+        <ScenarioComposer
+          active={active}
+          onSelect={setActive}
+          onRun={runSimulation}
+          isRunning={isRunning}
+          runResult={runResult}
+        />
         <div className="main-stack">
           <SituationSignals scenario={active} realtime={realtime} />
           <ImpactGraph scenario={active} realtime={realtime} />
@@ -468,7 +534,7 @@ export default function Home() {
         <div className="side-stack">
           <ReactionRiver scenario={active} />
           <PersonaCluster scenario={active} />
-          <VerdictPanel scenario={active} />
+          <VerdictPanel scenario={active} runResult={runResult} />
         </div>
       </div>
 
