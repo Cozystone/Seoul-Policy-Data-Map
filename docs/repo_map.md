@@ -12,7 +12,9 @@
 ## Main Modules
 
 - `app/page.tsx`: Dashboard UI, scenario switching, derived metrics, charts, and panels.
+- `app/api/seoul/realtime/route.ts`: Server route for normalized Seoul real-time city data.
 - `app/globals.css`: Responsive operations-room visual system.
+- `lib/seoul-realtime.ts`: Seoul citydata API adapter with fallback snapshot behavior.
 - `lib/sample-data.ts`: Seoul policy scenarios and base city signal values.
 - `lib/types.ts`: Scenario type definition.
 

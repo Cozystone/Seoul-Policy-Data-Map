@@ -6,7 +6,9 @@ SPDM is currently a frontend-first prototype. The first deployable slice focuses
 
 - Next.js renders the dashboard.
 - React state selects one of three sample scenarios.
-- Derived metrics are calculated in `app/page.tsx`.
+- `app/api/seoul/realtime/route.ts` calls the Seoul real-time city data adapter.
+- `lib/seoul-realtime.ts` normalizes crowding, weather, and traffic signals, and falls back to sample data when `SEOUL_OPEN_API_KEY` is not configured or an upstream call fails.
+- Derived metrics are calculated in `app/page.tsx` from scenario controls and the current city snapshot.
 - Recharts renders the Reaction River.
 - SVG and CSS render the Impact Graph and Persona Cluster.
 
@@ -14,7 +16,7 @@ SPDM is currently a frontend-first prototype. The first deployable slice focuses
 
 The intended production architecture adds a FastAPI ingestion and simulation backend:
 
-- `ingestion/realtime_city`: place-by-place polling for Seoul real-time city data.
+- `ingestion/realtime_city`: place-by-place polling for Seoul real-time city data. The frontend prototype already includes a lightweight Next.js server adapter for this source.
 - `ingestion/open_data`: CSV/API ingestion for Seoul Open Data Plaza datasets.
 - `ingestion/documents`: HTML, PDF, TXT, and Markdown policy document parsing.
 - `ingestion/reactions`: official news/RSS and manually governed community adapters.
@@ -28,3 +30,11 @@ The intended production architecture adds a FastAPI ingestion and simulation bac
 - Show policy impact and social reaction with similar visual weight.
 - Make every verdict traceable to data sources and assumptions.
 - Treat online/community collection as a governed adapter layer with robots/TOS review.
+
+## Seoul Realtime API Notes
+
+The adapter expects the Seoul Open API citydata endpoint shape:
+
+`http://openapi.seoul.go.kr:8088/{SEOUL_OPEN_API_KEY}/json/citydata/1/5/{AREA_NM}`
+
+The citydata API returns one area per call. Production polling should queue target areas, store raw responses, normalize metrics, and expose last-success timestamps per area.

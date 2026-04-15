@@ -19,8 +19,18 @@
 - `name`: policy title.
 - `type`: policy domain.
 - `region`: target area.
+- `realtimeArea`: Seoul citydata area name used by the live signal adapter.
 - `timeWindow`: operation period.
 - `personas`: affected stakeholder groups.
 - `objective`: policy goal.
 - `intensity`, `disruption`, `benefitClarity`, `personaSensitivity`, `evidenceStrength`, `novelty`: deterministic simulation controls.
 - `effect`, `sideEffect`, `evidence`, `mitigation`: report outputs.
+
+## Realtime Snapshot Shape
+
+- `areaName`: Seoul citydata area name.
+- `source`: `live` or `fallback`.
+- `updatedAt`: upstream observation time or fallback generation time.
+- `crowding.level`, `crowding.message`, `crowding.score`: citizen-readable crowding state and normalized score.
+- `weather.temperatureC`, `weather.condition`, `weather.pm10`: weather indicators.
+- `mobility.roadTrafficLevel`, `mobility.roadTrafficScore`, `mobility.subwayLine`: mobility indicators.

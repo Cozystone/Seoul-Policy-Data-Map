@@ -14,6 +14,7 @@ export const scenarios: Scenario[] = [
     shortName: "강남 심야 확대",
     type: "대중교통 · 혼잡 관리",
     region: "송파구 / 강남구 / 서초구",
+    realtimeArea: "강남 MICE 관광특구",
     timeWindow: "18:00 - 23:00",
     personas: ["관광객", "직장인", "상인"],
     objective:
@@ -38,6 +39,7 @@ export const scenarios: Scenario[] = [
     shortName: "청계천 접근 변경",
     type: "보행 · 관광 운영",
     region: "중구 / 종로구",
+    realtimeArea: "광화문·덕수궁",
     timeWindow: "토·일 11:00 - 19:00",
     personas: ["관광객", "상인", "주민"],
     objective:
@@ -62,6 +64,7 @@ export const scenarios: Scenario[] = [
     shortName: "야간 안전 강화",
     type: "안전 · 치안 · 조명",
     region: "홍대 / 신촌 / 건대입구",
+    realtimeArea: "홍대 관광특구",
     timeWindow: "22:00 - 02:00",
     personas: ["청년층", "직장인", "온라인 커뮤니티"],
     objective:

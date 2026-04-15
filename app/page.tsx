@@ -20,9 +20,9 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { scenarios, signalBase } from "@/lib/sample-data";
-import type { Scenario } from "@/lib/types";
+import type { Scenario, SeoulRealtimeSnapshot } from "@/lib/types";
 
 const colors = {
   blue: "#49b8e8",
@@ -32,10 +32,12 @@ const colors = {
   violet: "#9a7df5"
 };
 
-function deriveSignals(scenario: Scenario) {
+function deriveSignals(scenario: Scenario, realtime?: SeoulRealtimeSnapshot | null) {
+  const realtimeCrowding = realtime?.crowding.score ?? signalBase.crowding;
+  const realtimeMobility = realtime?.mobility.roadTrafficScore ?? signalBase.mobilityLoad;
   const pressure = Math.round(
-    signalBase.crowding * 0.28 +
-      signalBase.mobilityLoad * 0.24 +
+    realtimeCrowding * 0.28 +
+      realtimeMobility * 0.24 +
       scenario.intensity * 42 +
       scenario.personaSensitivity * 24
   );
@@ -134,8 +136,14 @@ function ScenarioComposer({
   );
 }
 
-function SituationSignals({ scenario }: { scenario: Scenario }) {
-  const signals = deriveSignals(scenario);
+function SituationSignals({
+  scenario,
+  realtime
+}: {
+  scenario: Scenario;
+  realtime: SeoulRealtimeSnapshot | null;
+}) {
+  const signals = deriveSignals(scenario, realtime);
   const items = [
     ["운영 압력", signals.pressure, colors.blue],
     ["시민 수용성", signals.acceptance, colors.green],
@@ -155,7 +163,11 @@ function SituationSignals({ scenario }: { scenario: Scenario }) {
       <div className="panel-header">
         <div>
           <h2 className="panel-title">Current Seoul Situation</h2>
-          <p className="panel-kicker">혼잡, 이동, 여론, 근거 데이터의 현재 신호</p>
+          <p className="panel-kicker">
+            {realtime
+              ? `${realtime.areaName} · ${realtime.source === "live" ? "실시간 API" : "샘플 대체"} · ${realtime.crowding.level}`
+              : "혼잡, 이동, 여론, 근거 데이터의 현재 신호"}
+          </p>
         </div>
         <Activity size={18} color={colors.green} />
       </div>
@@ -171,6 +183,15 @@ function SituationSignals({ scenario }: { scenario: Scenario }) {
         ))}
       </div>
       <div className="district-bars">
+        {realtime ? (
+          <div className="district-row">
+            <span>{realtime.areaName}</span>
+            <div className="mini-bar">
+              <span style={{ width: `${realtime.crowding.score}%`, background: colors.blue }} />
+            </div>
+            <strong>{realtime.crowding.score}</strong>
+          </div>
+        ) : null}
         {districts.map(([name, value, color]) => (
           <div className="district-row" key={name}>
             <span>{name}</span>
@@ -185,9 +206,16 @@ function SituationSignals({ scenario }: { scenario: Scenario }) {
   );
 }
 
-function ImpactGraph({ scenario }: { scenario: Scenario }) {
+function ImpactGraph({
+  scenario,
+  realtime
+}: {
+  scenario: Scenario;
+  realtime: SeoulRealtimeSnapshot | null;
+}) {
   const opposition = Math.round(40 + scenario.disruption * 40);
   const support = Math.round(44 + scenario.benefitClarity * 38);
+  const signals = deriveSignals(scenario, realtime);
 
   return (
     <section className="panel">
@@ -213,7 +241,7 @@ function ImpactGraph({ scenario }: { scenario: Scenario }) {
 
           <rect className="node-box" x="250" y="64" width="150" height="76" stroke={colors.blue} />
           <text className="node-text" x="325" y="95">운영 신호</text>
-          <text className="node-text" x="325" y="116">압력 {deriveSignals(scenario).pressure}</text>
+          <text className="node-text" x="325" y="116">압력 {signals.pressure}</text>
 
           <rect className="node-box" x="250" y="200" width="150" height="76" stroke={colors.amber} />
           <text className="node-text" x="325" y="232">생활 영향</text>
@@ -388,6 +416,26 @@ function VerdictPanel({ scenario }: { scenario: Scenario }) {
 
 export default function Home() {
   const [active, setActive] = useState<Scenario>(scenarios[0]);
+  const [realtime, setRealtime] = useState<SeoulRealtimeSnapshot | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setRealtime(null);
+
+    fetch(`/api/seoul/realtime?area=${encodeURIComponent(active.realtimeArea)}`, {
+      signal: controller.signal
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((snapshot: SeoulRealtimeSnapshot | null) => {
+        if (snapshot) {
+          setRealtime(snapshot);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => controller.abort();
+  }, [active.realtimeArea]);
 
   return (
     <main className="app-shell">
@@ -402,9 +450,11 @@ export default function Home() {
         <div className="topbar-status">
           <span className="status-pill">
             <span className="status-dot" />
-            Live rehearsal
+            {realtime?.source === "live" ? "Live city data" : "Fallback rehearsal"}
           </span>
-          <span className="status-pill">Freshness 05m</span>
+          <span className="status-pill">
+            {realtime ? `Updated ${realtime.updatedAt}` : "Loading city signal"}
+          </span>
           <span className="status-pill">Active scenario: {active.shortName}</span>
         </div>
       </header>
@@ -412,8 +462,8 @@ export default function Home() {
       <div className="workspace-grid">
         <ScenarioComposer active={active} onSelect={setActive} />
         <div className="main-stack">
-          <SituationSignals scenario={active} />
-          <ImpactGraph scenario={active} />
+          <SituationSignals scenario={active} realtime={realtime} />
+          <ImpactGraph scenario={active} realtime={realtime} />
         </div>
         <div className="side-stack">
           <ReactionRiver scenario={active} />

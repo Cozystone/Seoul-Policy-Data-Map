@@ -30,6 +30,20 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Seoul Realtime City Data
+
+SPDM includes a server-side adapter for Seoul real-time city data:
+
+- API route: `/api/seoul/realtime?area=광화문·덕수궁`
+- Environment variable: `SEOUL_OPEN_API_KEY`
+- Fallback: if the key is missing or the API call fails, the dashboard uses a deterministic sample snapshot so demos and Vercel deployments remain stable.
+
+Create `.env.local` from `.env.example` and set:
+
+```bash
+SEOUL_OPEN_API_KEY="your-seoul-open-api-key"
+```
+
 ## Build
 
 ```bash
@@ -38,7 +52,7 @@ npm run build
 
 ## Data Status
 
-This prototype uses deterministic sample data in `lib/sample-data.ts`. It does not yet connect to Seoul Open Data Plaza, Seoul real-time city data, news feeds, or social/community sources. Those adapters are described in `docs/architecture.md` and `docs/data_model.md`.
+This prototype uses deterministic sample policy scenarios in `lib/sample-data.ts`. Seoul real-time city data is wired through `app/api/seoul/realtime/route.ts` and `lib/seoul-realtime.ts`, with fallback data for keyless demos. It does not yet connect to long-range Seoul Open Data Plaza datasets, news feeds, or social/community sources. Those adapters are described in `docs/architecture.md` and `docs/data_model.md`.
 
 ## License and Source Access
 
