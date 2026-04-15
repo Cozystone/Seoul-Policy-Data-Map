@@ -1,0 +1,4 @@
+Seoul Policy Data Map is licensed under AGPL-3.0-only.
+
+Full license text:
+https://www.gnu.org/licenses/agpl-3.0.txt

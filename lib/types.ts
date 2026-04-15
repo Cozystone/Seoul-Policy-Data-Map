@@ -1,0 +1,23 @@
+export type Scenario = {
+  id: string;
+  name: string;
+  shortName: string;
+  type: string;
+  region: string;
+  timeWindow: string;
+  personas: string[];
+  objective: string;
+  intensity: number;
+  disruption: number;
+  benefitClarity: number;
+  personaSensitivity: number;
+  evidenceStrength: number;
+  novelty: number;
+  verdict: string;
+  judgement: string;
+  fragility: string;
+  mitigation: string;
+  effect: string;
+  sideEffect: string;
+  evidence: string;
+};
