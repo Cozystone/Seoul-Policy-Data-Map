@@ -824,10 +824,28 @@ a {
 
 .mf-prompt-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
+  grid-template-columns: minmax(0, 1fr) 120px 190px;
   gap: 10px;
   padding: 12px;
   border-top: 1px solid rgba(138, 160, 179, 0.18);
+}
+
+.mf-core-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid rgba(138, 160, 179, 0.28);
+  border-radius: 6px;
+  color: #dce9f4;
+  background: #071927;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mf-core-toggle input {
+  accent-color: #0079bc;
 }
 
 .mf-prompt select,

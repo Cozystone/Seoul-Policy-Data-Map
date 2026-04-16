@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--max-rounds", type=int, default=8)
     args = parser.parse_args()
 
-    with open(args.input, "r", encoding="utf-8") as f:
+    with open(args.input, "r", encoding="utf-8-sig") as f:
         payload = json.load(f)
 
     result = write_rehearsal_artifacts(payload, args.output_dir)

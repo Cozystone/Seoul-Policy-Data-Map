@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       MIROFISH_BACKEND_URL: "http://mirofish:5001"
+      MIROFISH_BACKEND_INTERNAL_URL: "http://mirofish:5001"
     ports:
       - "3000:3000"
     volumes:

@@ -48,12 +48,41 @@ export type SeoulRealtimeSnapshot = {
 export type SimulationRunRequest = {
   scenario: Scenario;
   realtime: SeoulRealtimeSnapshot | null;
+  executeCore?: boolean;
+  maxRounds?: number;
+};
+
+export type MiroFishArtifactResponse = {
+  success?: boolean;
+  data?: {
+    simulation_id?: string;
+    simulation_dir?: string;
+    artifacts?: {
+      simulation_config?: string;
+      reddit_profiles?: string;
+      twitter_profiles?: string;
+      state?: string;
+    };
+    output_json?: string;
+    report?: string;
+    core_run_state?: {
+      runner_status?: string;
+      total_rounds?: number;
+      twitter_running?: boolean;
+      reddit_running?: boolean;
+      process_pid?: number;
+      error?: string | null;
+    };
+  };
+  error?: string;
 };
 
 export type SimulationRunResult = {
   runId: string;
   scenarioId: string;
   createdAt: string;
+  engine?: "mirofish-offline" | "spdm-fallback";
+  mirofish?: MiroFishArtifactResponse;
   signals: {
     pressure: number;
     acceptance: number;

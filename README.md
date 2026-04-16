@@ -25,6 +25,7 @@ This project does not merely imitate MiroFish. It vendors actual MiroFish-Offlin
 - Seoul adapter route: `vendor/mirofish/backend/app/api/spdm.py`
 - Seoul adapter service: `vendor/mirofish/backend/app/services/spdm_seoul_adapter.py`
 - MiroFish-compatible CLI: `vendor/mirofish/backend/scripts/run_spdm_policy_rehearsal.py`
+- Local Docker UI can call the MiroFish backend through `MIROFISH_BACKEND_INTERNAL_URL`
 
 ## Tech Stack
 
@@ -76,11 +77,11 @@ docker exec spdm-ollama ollama pull nomic-embed-text
 
 SPDM includes a server-side adapter for Seoul real-time city data:
 
-- API route: `/api/seoul/realtime?area=광화문·덕수궁`
+- API route: `/api/seoul/realtime?area=광화문광장`
 - Environment variable: `SEOUL_OPEN_API_KEY`
 - Fallback: if the key is missing or the API call fails, the dashboard uses a deterministic sample snapshot so demos and Vercel deployments remain stable.
 
-Create `.env.local` from `.env.example` and set:
+Create `.env` from `.env.example` and set:
 
 ```bash
 SEOUL_OPEN_API_KEY="your-seoul-open-api-key"
@@ -94,7 +95,9 @@ The public Next.js UI button calls:
 POST /api/simulation/run
 ```
 
-That route is a lightweight UI fallback. The required MiroFish-based path is:
+That route uses MiroFish-Offline when `MIROFISH_BACKEND_URL` or `MIROFISH_BACKEND_INTERNAL_URL` is reachable. If the Python backend is unavailable, it falls back to a deterministic UI simulation so public demos keep working.
+
+The direct MiroFish artifact path is:
 
 ```bash
 cd vendor/mirofish/backend
@@ -104,14 +107,16 @@ python scripts/run_spdm_policy_rehearsal.py --input ../../../samples/spdm_rehear
 Inside Docker:
 
 ```bash
-docker compose exec mirofish python backend/scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json
+docker compose exec mirofish sh -lc "cd /app/backend && uv run python scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json"
 ```
 
 To delegate to MiroFish `SimulationRunner`:
 
 ```bash
-docker compose exec mirofish python backend/scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json --execute-core --max-rounds 8
+docker compose exec mirofish sh -lc "cd /app/backend && uv run python scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json --execute-core --max-rounds 1"
 ```
+
+The UI also has a `Core run` toggle. In local Docker this starts a one-round MiroFish core run through `/api/simulation/run`.
 
 The MiroFish-compatible path produces:
 
@@ -137,6 +142,16 @@ npm run build
 ## Data Status
 
 This prototype includes deterministic sample policy scenarios in `lib/sample-data.ts` and MiroFish-compatible sample inputs in `samples/`.
+
+## External Backend Deployment
+
+Vercel hosts the public Next.js UI. It does not run the MiroFish/Ollama/Neo4j Docker stack. To make the production UI call the real MiroFish backend, deploy the Docker stack or at least the `mirofish`, `neo4j`, and `ollama` services to a VM/container platform and set this Vercel environment variable:
+
+```bash
+MIROFISH_BACKEND_URL="https://your-public-mirofish-backend.example.com"
+```
+
+Until that URL exists, production Vercel uses the deterministic fallback while local Docker uses the real MiroFish backend.
 
 Samples:
 

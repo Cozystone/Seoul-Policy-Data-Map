@@ -1,6 +1,6 @@
 import type { SeoulRealtimeSnapshot } from "./types";
 
-const DEFAULT_AREA = "광화문·덕수궁";
+const DEFAULT_AREA = "광화문광장";
 
 const fallbackSnapshot: SeoulRealtimeSnapshot = {
   areaName: DEFAULT_AREA,
@@ -8,7 +8,7 @@ const fallbackSnapshot: SeoulRealtimeSnapshot = {
   updatedAt: new Date().toISOString(),
   crowding: {
     level: "보통",
-    message: "실시간 키가 없거나 호출이 실패해 샘플 혼잡 신호를 사용 중입니다.",
+    message: "실시간 API 키가 없거나 호출에 실패해 샘플 혼잡 신호를 사용 중입니다.",
     score: 62
   },
   weather: {
@@ -26,7 +26,7 @@ const fallbackSnapshot: SeoulRealtimeSnapshot = {
 const crowdingScore: Record<string, number> = {
   여유: 28,
   보통: 55,
-  약간붐빔: 72,
+  "약간 붐빔": 72,
   붐빔: 88
 };
 
@@ -70,7 +70,8 @@ function parseCityData(payload: unknown, areaName: string): SeoulRealtimeSnapsho
   const cityData = asObject(root.CITYDATA);
   const livePopulation = firstRecord(cityData.LIVE_PPLTN_STTS);
   const weather = firstRecord(cityData.WEATHER_STTS);
-  const road = firstRecord(cityData.ROAD_TRAFFIC_STTS);
+  const roadRoot = asObject(cityData.ROAD_TRAFFIC_STTS);
+  const road = asObject(roadRoot.AVG_ROAD_DATA);
   const subway = firstRecord(cityData.SUB_STTS);
 
   const crowdingLevel = asString(livePopulation.AREA_CONGEST_LVL, fallbackSnapshot.crowding.level);
@@ -92,7 +93,7 @@ function parseCityData(payload: unknown, areaName: string): SeoulRealtimeSnapsho
     },
     weather: {
       temperatureC: asNumber(weather.TEMP),
-      condition: asString(weather.PCP_MSG, asString(weather.WEATHER_STTS, "관측")),
+      condition: asString(weather.PCP_MSG, asString(weather.WEATHER_STTS, "관측 대기")),
       pm10: asNumber(weather.PM10)
     },
     mobility: {
@@ -113,7 +114,7 @@ export function getFallbackSeoulRealtime(areaName = DEFAULT_AREA): SeoulRealtime
 }
 
 export async function fetchSeoulRealtime(areaName = DEFAULT_AREA): Promise<SeoulRealtimeSnapshot> {
-  const key = process.env.SEOUL_OPEN_API_KEY;
+  const key = process.env.SEOUL_OPEN_API_KEY?.trim();
 
   if (!key) {
     return getFallbackSeoulRealtime(areaName);
@@ -134,7 +135,10 @@ export async function fetchSeoulRealtime(areaName = DEFAULT_AREA): Promise<Seoul
     const payload = (await response.json()) as unknown;
     const root = asObject(payload);
 
-    if (root.RESULT) {
+    const result = asObject(root.RESULT);
+    const resultCode = asString(result["RESULT.CODE"], asString(result.CODE));
+
+    if (!root.CITYDATA || (resultCode && resultCode !== "INFO-000")) {
       return getFallbackSeoulRealtime(areaName);
     }
 

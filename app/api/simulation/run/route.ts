@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runPolicySimulation } from "@/lib/simulation";
-import type { SimulationRunRequest } from "@/lib/types";
+import type { MiroFishArtifactResponse, SimulationRunRequest } from "@/lib/types";
 
 function buildMiroFishPayload(body: SimulationRunRequest) {
   const scenario = body.scenario;
@@ -22,7 +22,9 @@ function buildMiroFishPayload(body: SimulationRunRequest) {
         stance: scenario.verdict
       }
     ],
-    execute_core: false
+    execute_core: body.executeCore ?? process.env.SPDM_EXECUTE_CORE === "true",
+    max_rounds: body.maxRounds ?? Number(process.env.SPDM_CORE_MAX_ROUNDS ?? 1),
+    platform: process.env.SPDM_CORE_PLATFORM ?? "parallel"
   };
 }
 
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "scenario is required" }, { status: 400 });
   }
 
-  const miroFishBackendUrl = process.env.MIROFISH_BACKEND_URL;
+  const miroFishBackendUrl = process.env.MIROFISH_BACKEND_INTERNAL_URL ?? process.env.MIROFISH_BACKEND_URL;
 
   if (miroFishBackendUrl) {
     try {
@@ -45,15 +47,9 @@ export async function POST(request: Request) {
         body: JSON.stringify(buildMiroFishPayload(body))
       });
 
-      if (response.ok) {
-        const mirofish = (await response.json()) as {
-          success?: boolean;
-          data?: {
-            simulation_id?: string;
-            report?: string;
-            output_json?: string;
-          };
-        };
+      const mirofish = (await response.json().catch(() => null)) as MiroFishArtifactResponse | null;
+
+      if (response.ok && mirofish?.success) {
         const fallbackResult = runPolicySimulation(body.scenario, body.realtime ?? null);
 
         return NextResponse.json({
@@ -63,7 +59,12 @@ export async function POST(request: Request) {
           mirofish
         });
       }
-    } catch {
+      console.warn("MiroFish backend returned non-success response", {
+        status: response.status,
+        error: mirofish?.error
+      });
+    } catch (error) {
+      console.warn("MiroFish backend unavailable", error);
       // Keep the public UI usable when the Python/MiroFish stack is not running.
     }
   }

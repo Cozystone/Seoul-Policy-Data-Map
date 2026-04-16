@@ -71,6 +71,8 @@ function ScenarioConsole({
   realtime,
   runResult,
   isRunning,
+  executeCore,
+  setExecuteCore,
   onRun
 }: {
   active: Scenario;
@@ -78,20 +80,25 @@ function ScenarioConsole({
   realtime: SeoulRealtimeSnapshot | null;
   runResult: SimulationRunResult | null;
   isRunning: boolean;
+  executeCore: boolean;
+  setExecuteCore: (value: boolean) => void;
   onRun: () => void;
 }) {
   const signals = deriveSimulationSignals(active, realtime);
+  const coreState = runResult?.mirofish?.data?.core_run_state;
 
   return (
     <section className="mf-console">
       <div className="mf-console-top">
         <div>
-          <span className="mf-eyebrow">Multi-agent policy rehearsal</span>
-          <h1>Simulate Seoul policy before it reaches the city.</h1>
-          <p>정책 문서, 권역 신호, 시민 집단 반응을 하나의 실행 콘솔에서 묶어 결과 리포트로 확인합니다.</p>
+          <span className="mf-eyebrow">Seoul policy reaction twin</span>
+          <h1>정책이 도시로 나가기 전에 반응을 리허설합니다.</h1>
+          <p>
+            정책 문서, 실시간 도시 신호, 지역 맥락, 시민 페르소나를 MiroFish 기반 멀티에이전트 실행 흐름으로 연결합니다.
+          </p>
         </div>
         <div className="mf-live">
-          <strong>{realtime?.source === "live" ? "LIVE" : "FALLBACK"}</strong>
+          <strong>{realtime?.source === "live" ? "LIVE" : "SAMPLE"}</strong>
           <span>{realtime?.areaName ?? active.realtimeArea}</span>
           <span>{realtime?.crowding.level ?? "loading"}</span>
         </div>
@@ -117,6 +124,14 @@ function ScenarioConsole({
               </option>
             ))}
           </select>
+          <label className="mf-core-toggle">
+            <input
+              type="checkbox"
+              checked={executeCore}
+              onChange={(event) => setExecuteCore(event.target.checked)}
+            />
+            <span>Core run</span>
+          </label>
           <button onClick={onRun} disabled={isRunning}>
             <Play size={18} />
             {isRunning ? "Running agents" : "Start Simulation"}
@@ -143,11 +158,16 @@ function ScenarioConsole({
         <div>
           <span className="mf-eyebrow">Current run</span>
           <strong>{runResult ? runResult.verdict.headline : "No execution yet"}</strong>
-          <p>{runResult ? runResult.verdict.summary : "시뮬레이션을 실행하면 Run ID, verdict, 반응 점수, 권고안이 생성됩니다."}</p>
+          <p>
+            {runResult
+              ? runResult.verdict.summary
+              : "시뮬레이션을 실행하면 Run ID, verdict, 시민 반응 점수, 보완 권고가 생성됩니다."}
+          </p>
         </div>
         <div className="mf-run-meta">
           <span>{runResult?.runId ?? "pending"}</span>
-          <span>{runResult ? new Date(runResult.createdAt).toLocaleString("ko-KR") : "ready"}</span>
+          <span>{runResult?.engine ?? "ready"}</span>
+          <span>{coreState ? `core ${coreState.runner_status ?? "unknown"}` : "artifact mode"}</span>
         </div>
       </div>
     </section>
@@ -156,11 +176,12 @@ function ScenarioConsole({
 
 function Pipeline({ runResult }: { runResult: SimulationRunResult | null }) {
   const steps = [
-    ["01", "Seed", "정책 문서와 권역 조건"],
+    ["01", "Seed", "정책 문서와 도시 상태"],
     ["02", "Graph", "영향 경로와 이해관계자"],
-    ["03", "Agents", "집단별 반응 라운드"],
+    ["03", "Agents", "서울형 시민 페르소나"],
     ["04", "Report", "verdict와 보완 권고"]
   ];
+  const artifacts = runResult?.mirofish?.data?.artifacts;
 
   return (
     <section className="mf-pipeline">
@@ -174,16 +195,16 @@ function Pipeline({ runResult }: { runResult: SimulationRunResult | null }) {
       ))}
       <div className="mf-agent-counts">
         <div>
-          <strong>{runResult ? 72 : 0}</strong>
+          <strong>{runResult ? 9 : 0}</strong>
           <span>Agents</span>
         </div>
         <div>
-          <strong>{runResult ? 8 : 0}</strong>
+          <strong>{runResult?.mirofish?.data?.core_run_state?.total_rounds ?? (runResult ? 8 : 0)}</strong>
           <span>Rounds</span>
         </div>
         <div>
-          <strong>{runResult ? 219 : 0}</strong>
-          <span>Actions</span>
+          <strong>{artifacts ? Object.keys(artifacts).length : runResult ? 1 : 0}</strong>
+          <span>Artifacts</span>
         </div>
       </div>
     </section>
@@ -251,12 +272,14 @@ function ReactionChart({ active, runResult }: { active: Scenario; runResult: Sim
 }
 
 function ReportPreview({ active, runResult }: { active: Scenario; runResult: SimulationRunResult | null }) {
+  const coreState = runResult?.mirofish?.data?.core_run_state;
+
   return (
     <section className="mf-report">
       <div className="mf-panel-head">
         <ShieldCheck size={18} />
         <div>
-          <h2>Prediction Report</h2>
+          <h2>Policy Verdict</h2>
           <p>{runResult ? runResult.verdict.grade : "structured output preview"}</p>
         </div>
       </div>
@@ -282,8 +305,12 @@ function ReportPreview({ active, runResult }: { active: Scenario; runResult: Sim
         </article>
         <article>
           <Database size={17} />
-          <strong>Evidence</strong>
-          <p>{active.evidence}</p>
+          <strong>MiroFish output</strong>
+          <p>
+            {runResult?.mirofish?.success
+              ? `seed ${runResult.runId}, ${coreState ? `core ${coreState.runner_status}` : "artifact generated"}`
+              : active.evidence}
+          </p>
         </article>
       </div>
     </section>
@@ -295,6 +322,7 @@ export default function SpdmRedesign() {
   const [realtime, setRealtime] = useState<SeoulRealtimeSnapshot | null>(null);
   const [runResult, setRunResult] = useState<SimulationRunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [executeCore, setExecuteCore] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -320,7 +348,7 @@ export default function SpdmRedesign() {
       const response = await fetch("/api/simulation/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario: active, realtime })
+        body: JSON.stringify({ scenario: active, realtime, executeCore, maxRounds: 1 })
       });
 
       if (response.ok) {
@@ -338,7 +366,7 @@ export default function SpdmRedesign() {
           <SeoulMark />
           <div>
             <strong>Seoul Policy Data Map</strong>
-            <span>서울시 정책 시뮬레이션 콘솔</span>
+            <span>서울 정책 반응 트윈 실행 콘솔</span>
           </div>
         </div>
         <nav>
@@ -357,6 +385,8 @@ export default function SpdmRedesign() {
             realtime={realtime}
             runResult={runResult}
             isRunning={isRunning}
+            executeCore={executeCore}
+            setExecuteCore={setExecuteCore}
             onRun={runSimulation}
           />
           <Pipeline runResult={runResult} />

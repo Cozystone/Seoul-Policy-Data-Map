@@ -148,8 +148,8 @@ def build_world_seed(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a Seoul world seed while preserving MiroFish's document-first workflow."""
     policy_document = payload.get("policy_document", "")
     parsed = parse_policy_document(policy_document)
-    current_city_state = payload.get("current_city_state", {})
-    external_signals = payload.get("external_signals", [])
+    current_city_state = payload.get("current_city_state") or {}
+    external_signals = payload.get("external_signals") or []
 
     seed = {
         "seed_type": "seoul_policy_reaction_twin",
