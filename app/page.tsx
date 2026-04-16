@@ -1,5 +1,6 @@
 "use client";
 
+import SpdmRedesign from "./spdm-redesign";
 import {
   Activity,
   BarChart3,
@@ -25,11 +26,11 @@ import { scenarios, signalBase } from "@/lib/sample-data";
 import type { Scenario, SeoulRealtimeSnapshot, SimulationRunResult } from "@/lib/types";
 
 const colors = {
-  blue: "#49b8e8",
-  green: "#60ce85",
-  amber: "#f6b653",
-  red: "#ee5d72",
-  violet: "#9a7df5"
+  blue: "#0079bc",
+  green: "#2e853c",
+  amber: "#fe9c00",
+  red: "#ae1932",
+  violet: "#345f53"
 };
 
 function deriveSignals(scenario: Scenario, realtime?: SeoulRealtimeSnapshot | null) {
@@ -340,11 +341,11 @@ function ReactionRiver({ scenario }: { scenario: Scenario }) {
 
 function PersonaCluster({ scenario }: { scenario: Scenario }) {
   const personas = [
-    { name: "직장인", x: "72%", y: "33%", size: 68, color: colors.amber },
-    { name: "관광객", x: "45%", y: "30%", size: 62, color: colors.blue },
-    { name: "상인", x: "24%", y: "42%", size: 74, color: colors.green },
-    { name: "주민", x: "36%", y: "72%", size: 58, color: colors.red },
-    { name: "청년층", x: "78%", y: "72%", size: 48, color: colors.violet }
+    { name: "직장인", stance: "조건부 수용", weight: 68, driver: "퇴근 접근성", color: colors.amber },
+    { name: "관광객", stance: "수용 우세", weight: 62, driver: "길찾기 편의", color: colors.blue },
+    { name: "상인", stance: "효과 기대", weight: 74, driver: "유입 변화", color: colors.green },
+    { name: "주민", stance: "민원 민감", weight: 58, driver: "소음·체류", color: colors.red },
+    { name: "청년층", stance: "관망", weight: 48, driver: "온라인 확산", color: colors.violet }
   ];
 
   return (
@@ -358,19 +359,14 @@ function PersonaCluster({ scenario }: { scenario: Scenario }) {
       </div>
       <div className="persona-map">
         {personas.map((persona) => (
-          <div
-            className="persona-bubble"
-            key={persona.name}
-            style={
-              {
-                "--x": persona.x,
-                "--y": persona.y,
-                "--size": `${persona.size}px`,
-                "--color": persona.color
-              } as React.CSSProperties
-            }
-          >
-            {persona.name}
+          <div className="persona-row" key={persona.name}>
+            <span className="persona-color" style={{ background: persona.color }} />
+            <strong>{persona.name}</strong>
+            <span>{persona.stance}</span>
+            <span>{persona.driver}</span>
+            <div className="persona-weight">
+              <i style={{ width: `${persona.weight}%`, background: persona.color }} />
+            </div>
           </div>
         ))}
       </div>
@@ -441,7 +437,7 @@ function VerdictPanel({
   );
 }
 
-export default function Home() {
+function Home() {
   const [active, setActive] = useState<Scenario>(scenarios[0]);
   const [realtime, setRealtime] = useState<SeoulRealtimeSnapshot | null>(null);
   const [runResult, setRunResult] = useState<SimulationRunResult | null>(null);
@@ -500,11 +496,20 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">SPDM</div>
+          <div className="brand-mark">
+            <span>서울</span>
+          </div>
           <div>
             <h1>Seoul Policy Data Map</h1>
-            <p>정책 영향 경로와 시민 반응을 함께 보는 서울시 의사결정 리허설 대시보드</p>
+            <p>서울시 정책 데이터맵 · 산, 한강, 시민 반응을 함께 보는 의사결정 리허설</p>
           </div>
+        </div>
+        <div className="seoul-signature" aria-label="Seoul identity line">
+          <span>산</span>
+          <i />
+          <span>한강</span>
+          <i />
+          <span>시민</span>
         </div>
         <div className="topbar-status">
           <span className="status-pill">
@@ -549,3 +554,5 @@ export default function Home() {
     </main>
   );
 }
+
+export default SpdmRedesign;
