@@ -102,3 +102,114 @@ export type SimulationRunResult = {
     neutral: number;
   };
 };
+
+export type MiroFishOntology = {
+  entity_types?: string[];
+  edge_types?: string[];
+  analysis_summary?: string;
+};
+
+export type MiroFishGraphNode = {
+  uuid: string;
+  name?: string;
+  labels?: string[];
+  summary?: string;
+  attributes?: Record<string, string>;
+};
+
+export type MiroFishGraphEdge = {
+  uuid?: string;
+  source_node_uuid: string;
+  target_node_uuid: string;
+  name?: string;
+  fact_type?: string;
+  fact?: string;
+};
+
+export type MiroFishGraphData = {
+  graph_id?: string;
+  node_count?: number;
+  edge_count?: number;
+  nodes: MiroFishGraphNode[];
+  edges: MiroFishGraphEdge[];
+};
+
+export type MiroFishTask = {
+  task_id?: string;
+  status?: string;
+  message?: string;
+  progress?: number;
+  result?: Record<string, unknown>;
+};
+
+export type MiroFishProject = {
+  project_id: string;
+  name?: string;
+  status?: string;
+  graph_id?: string | null;
+  graph_build_task_id?: string | null;
+  ontology?: {
+    entity_types?: string[];
+    edge_types?: string[];
+  } | null;
+  analysis_summary?: string;
+};
+
+export type MiroFishPrepareStatus = {
+  task_id?: string;
+  status?: string;
+  message?: string;
+  progress?: number;
+  already_prepared?: boolean;
+  prepare_info?: {
+    status?: string;
+    profiles_count?: number;
+    entities_count?: number;
+  };
+};
+
+export type MiroFishProfileRealtime = {
+  count?: number;
+  total_expected?: number;
+  is_generating?: boolean;
+  profiles?: Record<string, unknown>[];
+};
+
+export type MiroFishConfigRealtime = {
+  file_exists?: boolean;
+  is_generating?: boolean;
+  generation_stage?: string;
+  config?: Record<string, unknown>;
+};
+
+export type MiroFishRunStatus = {
+  simulation_id?: string;
+  runner_status?: string;
+  current_round?: number;
+  total_rounds?: number;
+  twitter_running?: boolean;
+  reddit_running?: boolean;
+  twitter_completed?: boolean;
+  reddit_completed?: boolean;
+  twitter_actions_count?: number;
+  reddit_actions_count?: number;
+  total_actions_count?: number;
+  graph_memory_update_enabled?: boolean;
+  graph_id?: string;
+};
+
+export type MiroFishAction = {
+  id?: string;
+  round_num?: number;
+  timestamp?: string;
+  platform?: string;
+  agent_id?: number;
+  agent_name?: string;
+  action_type?: string;
+  action_args?: Record<string, unknown>;
+};
+
+export type MiroFishRunStatusDetail = MiroFishRunStatus & {
+  all_actions?: MiroFishAction[];
+  recent_actions?: MiroFishAction[];
+};

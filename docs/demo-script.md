@@ -1,50 +1,55 @@
 # Demo Script
 
-## UI Demo
+## Product Demo
 
-1. Open `http://localhost:3000` or the Vercel URL.
-2. Confirm the Seoul Policy Data Map console and current city data mode.
-3. Select a policy seed.
-4. Click `Start Simulation`.
-5. Confirm Run ID, engine mode, execution timestamp, verdict grade, reaction evolution, and prediction report.
-6. In local Docker, turn on `Core run` and click `Start Simulation` to start a one-round MiroFish core run.
-7. On Vercel, explain that the public UI uses fallback mode until a public `MIROFISH_BACKEND_URL` is connected.
+1. Open `http://localhost:3000` or the production URL.
+2. Confirm the console starts from `Seed Input`, not from a static dashboard.
+3. Let the app bootstrap:
+   - Seoul realtime data fetch
+   - ontology generation
+   - graph build task polling
+   - simulation create / prepare
+4. Watch the left graph panel:
+   - node/edge counts increase
+   - `Graph Building` task progress advances
+   - graph ID is assigned
+5. Inspect `Environment / Persona`:
+   - generated persona list
+   - prepare status
+   - simulation ID
+6. Click `듀얼 플랫폼 시뮬레이션 시작`.
+7. Watch `Round Simulation`:
+   - run status
+   - current round
+   - action feed
+   - graph memory updates reflected by graph polling
+8. Explain the next intended stage:
+   - final report view
+   - targeted agent/report follow-up interaction
 
-## MiroFish Core Demo
+## Local Runtime Demo
 
 1. Copy `.env.example` to `.env`.
-2. Add `SEOUL_OPEN_API_KEY` to `.env` if live Seoul city data is available.
-3. Start local stack:
+2. Add `SEOUL_OPEN_API_KEY` if live Seoul city data is required.
+3. Start the stack:
 
 ```bash
 docker compose up -d
 ```
 
-4. Pull local models:
+4. Confirm services:
 
 ```bash
-docker exec spdm-ollama ollama pull qwen2.5:7b
-docker exec spdm-ollama ollama pull nomic-embed-text
+docker compose ps
 ```
 
-5. Generate MiroFish-compatible SPDM artifacts:
+5. Optional direct upstream validation:
 
 ```bash
-docker compose exec mirofish sh -lc "cd /app/backend && uv run python scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json"
+curl http://localhost:5001/api/graph/project/list
 ```
 
-6. To delegate to MiroFish `SimulationRunner` after models are ready:
+6. MiroFish core artifacts remain under:
 
-```bash
-docker compose exec mirofish sh -lc "cd /app/backend && uv run python scripts/run_spdm_policy_rehearsal.py --input /app/samples/spdm_rehearsal_gangnam.json --execute-core --max-rounds 1"
-```
-
-7. Check generated files under `vendor/mirofish/backend/uploads/simulations/<simulation_id>/`:
-
-- `spdm_world_seed.json`
-- `spdm_entities.json`
-- `reddit_profiles.json`
-- `twitter_profiles.csv`
-- `simulation_config.json`
-- `spdm_output.json`
-- `spdm_report.md`
+- `vendor/mirofish/backend/uploads/simulations/<simulation_id>/`
+- graph/project state under MiroFish backend project storage

@@ -13,14 +13,18 @@
 
 ## SPDM Next.js Modules
 
-- `app/page.tsx`: Dashboard UI, scenario switching, derived metrics, charts, and panels.
+- `app/page.tsx`: Public entry that mounts the SPDM console.
+- `app/spdm-redesign.tsx`: MiroFish-style seed -> graph -> environment -> simulation console.
 - `app/api/seoul/realtime/route.ts`: Server route for normalized Seoul real-time city data.
-- `app/api/simulation/run/route.ts`: Server route that executes deterministic SPDM scenario runs.
-- `app/globals.css`: Responsive operations-room visual system.
+- `app/api/mirofish/bootstrap/route.ts`: Seed bundle to upstream ontology generation and graph build kickoff.
+- `app/api/mirofish/[...path]/route.ts`: Thin proxy to upstream MiroFish graph/simulation/report APIs.
+- `app/api/simulation/run/route.ts`: Legacy SPDM deterministic run route retained for fallback/rehearsal artifacts.
+- `app/globals.css`: Shared visual system for the console.
+- `lib/mirofish-client.ts`: Shared backend URL resolution for MiroFish proxy/bootstrap routes.
 - `lib/seoul-realtime.ts`: Seoul citydata API adapter with fallback snapshot behavior.
-- `lib/simulation.ts`: Deterministic policy rehearsal scoring logic.
+- `lib/simulation.ts`: Deterministic fallback policy rehearsal scoring logic.
 - `lib/sample-data.ts`: Seoul policy scenarios and base city signal values.
-- `lib/types.ts`: Scenario type definition.
+- `lib/types.ts`: Shared SPDM + MiroFish proxy types.
 
 ## MiroFish Core Map
 
