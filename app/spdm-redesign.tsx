@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronDown, Github, Languages, Maximize2, Play, RefreshCw } from "lucide-react";
+import { Check, ChevronDown, Maximize2, Play, RefreshCw } from "lucide-react";
 import { scenarios } from "@/lib/sample-data";
 import type {
   MiroFishAction,
@@ -477,21 +477,15 @@ export default function SpdmRedesign() {
     <main className="miro-shell">
       <header className="miro-topbar">
         <div className="miro-topbar-left">
-          <button className="miro-icon-btn" aria-label="back"><ArrowLeft size={18} /></button>
           <div className="miro-brand"><div className="miro-brand-mark">S</div><strong>Seoul Policy Reaction Twin</strong></div>
         </div>
         <div className="miro-topbar-center">
-          <button className="miro-tab">그래프</button>
           <button className="miro-tab miro-tab-active">시뮬레이션</button>
-          <button className="miro-tab">리포트</button>
           <span className="miro-section-title">MiroFish Flow</span>
           <span className="miro-phase-dot" />
           <span className="miro-phase-text">seed → graph → env → simulation</span>
         </div>
-        <div className="miro-topbar-right">
-          <button className="miro-lang-btn"><Languages size={14} />한국어 / 영어</button>
-          <a className="miro-github-btn" href="https://github.com/Cozystone/Seoul-Policy-Data-Map"><Github size={16} />깃허브</a>
-        </div>
+        <div className="miro-topbar-right" />
       </header>
 
       <div className="miro-workspace">
