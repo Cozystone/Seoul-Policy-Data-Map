@@ -188,10 +188,15 @@ export type MiroFishRunStatus = {
   runner_status?: string;
   current_round?: number;
   total_rounds?: number;
+  simulated_hours?: number;
   twitter_running?: boolean;
   reddit_running?: boolean;
   twitter_completed?: boolean;
   reddit_completed?: boolean;
+  twitter_current_round?: number;
+  reddit_current_round?: number;
+  twitter_simulated_hours?: number;
+  reddit_simulated_hours?: number;
   twitter_actions_count?: number;
   reddit_actions_count?: number;
   total_actions_count?: number;

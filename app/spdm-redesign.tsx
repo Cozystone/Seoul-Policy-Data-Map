@@ -24,12 +24,20 @@ type RenderNode = { id: string; label: string; type: string; x: number; y: numbe
 type RenderEdge = { from: string; to: string; label: string };
 type ConsoleLog = { ts: string; message: string };
 type GraphGrowth = { nodes: number; edges: number };
+type ConsoleView = "build" | "simulation" | "report";
 
 const entityColors = ["#ff7a45", "#1d5fd0", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4", "#f59e0b", "#64748b"];
 
 function formatClock(iso?: string) {
   if (!iso) return "--:--:--";
   return new Date(iso).toLocaleTimeString("ko-KR", { hour12: false });
+}
+
+function formatDuration(hours?: number) {
+  if (typeof hours !== "number" || Number.isNaN(hours)) return "--";
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${h}h ${m}m`;
 }
 
 function buildStableId(prefix: string, seed: string) {
@@ -185,6 +193,7 @@ export default function SpdmRedesign() {
   const [isAskingReport, setIsAskingReport] = useState(false);
   const [isInterviewing, setIsInterviewing] = useState(false);
   const [showEdgeLabels, setShowEdgeLabels] = useState(true);
+  const [activeView, setActiveView] = useState<ConsoleView>("build");
   const [customRounds, setCustomRounds] = useState(40);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -475,9 +484,24 @@ export default function SpdmRedesign() {
     void fetchReportBySimulation(simulationId);
   }, [simulationId]);
 
+  useEffect(() => {
+    if (reportData?.status === "completed") {
+      setActiveView("report");
+      return;
+    }
+    if (runStatus?.runner_status) {
+      setActiveView("simulation");
+      return;
+    }
+    if (simulationId || isInitializing || graphTask?.status) {
+      setActiveView("build");
+    }
+  }, [reportData?.status, runStatus?.runner_status, simulationId, isInitializing, graphTask?.status]);
+
   async function runSimulation() {
     if (!simulationId) return;
     setIsRunning(true);
+    setActiveView("simulation");
     addLog(`Simulation start 요청: ${simulationId}`);
     try {
       const response = await fetch(`/api/mirofish/simulation/start`, {
@@ -539,6 +563,7 @@ export default function SpdmRedesign() {
   async function generateReport() {
     if (!simulationId) return;
     setIsGeneratingReport(true);
+    setActiveView("report");
     addLog(`Report generation 요청: ${simulationId}`);
     let startedPolling = false;
     try {
@@ -662,6 +687,18 @@ export default function SpdmRedesign() {
   const selectedProfile = profiles[selectedAgentId] ?? profiles[0] ?? null;
   const ontologyEntityTags = useMemo(() => (ontology?.entity_types ?? []).map(normalizeTag), [ontology]);
   const ontologyEdgeTags = useMemo(() => (ontology?.edge_types ?? []).map(normalizeTag), [ontology]);
+  const environmentReady = Boolean(
+    simulationId && (
+      prepareStatus?.status === "ready" ||
+      prepareStatus?.status === "completed" ||
+      prepareStatus?.already_prepared ||
+      configRealtime?.file_exists ||
+      (profilesRealtime?.count ?? 0) > 0
+    )
+  );
+  const canRunSimulation = Boolean(simulationId && environmentReady && !isRunning);
+  const totalEvents = (runStatus?.twitter_actions_count ?? 0) + (runStatus?.reddit_actions_count ?? 0);
+  const showGraphPanel = activeView !== "report";
 
   useEffect(() => {
     if (profiles.length && selectedAgentId >= profiles.length) {
@@ -676,7 +713,9 @@ export default function SpdmRedesign() {
           <div className="miro-brand"><div className="miro-brand-mark">S</div><strong>Seoul Policy Reaction Twin</strong></div>
         </div>
         <div className="miro-topbar-center">
-          <span className="miro-tab miro-tab-active">시뮬레이션 콘솔</span>
+          <button className={`miro-tab ${activeView === "build" ? "miro-tab-active" : ""}`} onClick={() => setActiveView("build")} type="button">그래프 구축</button>
+          <button className={`miro-tab ${activeView === "simulation" ? "miro-tab-active" : ""}`} onClick={() => simulationId && setActiveView("simulation")} type="button" disabled={!simulationId}>시뮬레이션</button>
+          <button className={`miro-tab ${activeView === "report" ? "miro-tab-active" : ""}`} onClick={() => (reportData?.report_id || simulationId) && setActiveView("report")} type="button" disabled={!simulationId}>리포트</button>
           <span className="miro-section-title">MiroFish Flow</span>
           <span className="miro-phase-dot" />
           <span className="miro-phase-text">seed → graph → env → simulation → report</span>
@@ -684,8 +723,8 @@ export default function SpdmRedesign() {
         <div className="miro-topbar-right" />
       </header>
 
-      <div className="miro-workspace">
-        <section className="miro-graph-panel">
+      <div className={`miro-workspace ${activeView === "report" ? "miro-workspace-report" : ""}`}>
+        {showGraphPanel ? <section className="miro-graph-panel">
           <div className="miro-graph-header">
             <span className="miro-graph-title">World Skeleton / Explanation Graph</span>
             <div className="miro-graph-tools">
@@ -741,9 +780,11 @@ export default function SpdmRedesign() {
               {entityTypes.map((item) => <div className="miro-legend-item" key={item.name}><span className="miro-legend-dot" style={{ background: item.color }} /><span>{item.name}</span></div>)}
             </div>
           </div>
-        </section>
+        </section> : null}
 
         <section className="miro-workbench">
+          {activeView === "build" ? (
+            <>
           <div className="miro-step-card">
             <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">01</span><div><span className="miro-step-title">Seed Input</span><p className="miro-step-subtitle">문서 + 예측 질문 + 도시 상태</p></div></div><span className={`miro-badge ${project ? "miro-badge-success" : isInitializing ? "miro-badge-processing" : "miro-badge-idle"}`}>{project ? <Check size={14} /> : null}{project ? "완료" : isInitializing ? "진행 중" : "대기"}</span></div>
             <div className="miro-step-body">
@@ -818,22 +859,39 @@ export default function SpdmRedesign() {
             </div>
           </div>
 
+            </>
+          ) : null}
+
+          {activeView === "simulation" ? (
+            <>
+
           <div className="miro-step-card">
-            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">04</span><div><span className="miro-step-title">Round Simulation</span><p className="miro-step-subtitle">time-evolving multi-agent run</p></div></div><span className={`miro-badge ${runStatus?.runner_status === "completed" ? "miro-badge-success" : "miro-badge-processing"}`}>{runStatus?.runner_status ?? "idle"}</span></div>
+            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">03</span><div><span className="miro-step-title">Dual-Platform Simulation</span><p className="miro-step-subtitle">Info Plaza / Topic Community / memory update</p></div></div><span className={`miro-badge ${runStatus?.runner_status === "completed" ? "miro-badge-success" : "miro-badge-processing"}`}>{runStatus?.runner_status ?? (environmentReady ? "ready" : "locked")}</span></div>
             <div className="miro-step-body">
               <p className="miro-api-note">POST /api/simulation/start (enable_graph_memory_update=true)</p>
-              <div className="miro-config-grid">
-                <div className="miro-config-item"><span>Duration</span><strong>{String(timeConfig.duration_hours ?? 72)} hours</strong></div>
-                <div className="miro-config-item"><span>Current Round</span><strong>{currentRound} / {runStatus?.total_rounds ?? customRounds}</strong></div>
-                <div className="miro-config-item"><span>Twitter Acts</span><strong>{runStatus?.twitter_actions_count ?? 0}</strong></div>
-                <div className="miro-config-item"><span>Reddit Acts</span><strong>{runStatus?.reddit_actions_count ?? 0}</strong></div>
-                <div className="miro-config-item"><span>Recency Weight</span><strong>{String((platformConfigs.info_plaza as Record<string, unknown> | undefined)?.recency_weight ?? 0.4)}</strong></div>
-                <div className="miro-config-item"><span>Viral Threshold</span><strong>{String((platformConfigs.topic_community as Record<string, unknown> | undefined)?.viral_threshold ?? 15)}</strong></div>
+              <div className="miro-step-actions">
+                <button className="miro-primary-btn" type="button" onClick={runSimulation} disabled={!canRunSimulation}>
+                  <Play size={14} />{isRunning ? "시뮬레이션 실행 중" : "듀얼플랫폼 시뮬레이션 시작"}
+                </button>
+                <button className="miro-primary-btn" type="button" onClick={() => setActiveView("build")}>
+                  그래프 구축으로 이동
+                </button>
               </div>
-              <div className="miro-llm-reasoning">
-                <strong>Round Progression</strong>
-                <p>각 round에서 사건 인식, 관찰, 태도 갱신, 발화 생성, graph memory write-back이 순차적으로 반영됩니다. 현재 그래프는 simulation 중에도 계속 다시 읽어옵니다.</p>
+              <div className="miro-platform-grid">
+                <div className="miro-platform-card">
+                  <span className="miro-platform-title">Info Plaza</span>
+                  <div className="miro-platform-metric"><span>ROUND</span><strong>{runStatus?.twitter_current_round ?? currentRound}/{runStatus?.total_rounds ?? customRounds}</strong></div>
+                  <div className="miro-platform-metric"><span>Elapsed Time</span><strong>{formatDuration(runStatus?.twitter_simulated_hours ?? runStatus?.simulated_hours)}</strong></div>
+                  <div className="miro-platform-metric"><span>ACTS</span><strong>{runStatus?.twitter_actions_count ?? 0}</strong></div>
+                </div>
+                <div className="miro-platform-card">
+                  <span className="miro-platform-title">Topic Community</span>
+                  <div className="miro-platform-metric"><span>ROUND</span><strong>{runStatus?.reddit_current_round ?? currentRound}/{runStatus?.total_rounds ?? customRounds}</strong></div>
+                  <div className="miro-platform-metric"><span>Elapsed Time</span><strong>{formatDuration(runStatus?.reddit_simulated_hours ?? runStatus?.simulated_hours)}</strong></div>
+                  <div className="miro-platform-metric"><span>ACTS</span><strong>{runStatus?.reddit_actions_count ?? 0}</strong></div>
+                </div>
               </div>
+              <div className="miro-total-events"><strong>TOTAL EVENTS: {totalEvents}</strong><span>{runStatus?.twitter_actions_count ?? 0} / {runStatus?.reddit_actions_count ?? 0}</span></div>
               <div className="miro-ready-grid">
                 <div className="miro-ready-box"><span>Custom Rounds</span><strong>{customRounds} rounds</strong></div>
                 <div className="miro-ready-box"><span>Graph Memory Update</span><strong>enabled</strong></div>
@@ -843,14 +901,12 @@ export default function SpdmRedesign() {
                 <input className="miro-round-input" type="number" min={1} max={72} value={customRounds} onChange={(e) => setCustomRounds(Number(e.target.value) || 1)} />
                 <small>rounds</small>
               </div>
-              <button className="miro-run-btn" onClick={runSimulation} disabled={!simulationId || isRunning || !(prepareStatus?.status === "ready" || prepareStatus?.status === "completed")}>
-                <span>{isRunning ? "시뮬레이션 실행 중" : "듀얼 플랫폼 시뮬레이션 시작"}</span><Play size={16} />
-              </button>
               <div className="miro-sequence-list">
                 {recentActions.length ? recentActions.map((action, index) => (
                   <div className="miro-sequence-card" key={`${action.id ?? action.timestamp}-${index}`}>
-                    <div className="miro-sequence-head"><strong>{action.agent_name ?? `Agent ${action.agent_id ?? index}`}</strong><span>{action.platform} / R{action.round_num ?? 0} / {action.action_type ?? "ACTION"}</span></div>
+                    <div className="miro-sequence-head"><strong>{action.agent_name ?? `Agent ${action.agent_id ?? index}`}</strong><span>{action.platform === "twitter" ? "Info Plaza" : "Topic Community"} / R{action.round_num ?? 0} / {action.action_type ?? "ACTION"}</span></div>
                     <p>{getActionSummary(action)}</p>
+                    <small className="miro-action-time">{formatClock(action.timestamp)}</small>
                   </div>
                 )) : (
                   <div className="miro-sequence-card"><div className="miro-sequence-head"><strong>Simulation Feed</strong><span>waiting</span></div><p>시뮬레이션이 시작되면 round별 action feed가 여기에 누적됩니다.</p></div>
@@ -859,8 +915,13 @@ export default function SpdmRedesign() {
             </div>
           </div>
 
+            </>
+          ) : null}
+
+          {activeView === "report" ? (
+            <>
           <div className="miro-step-card miro-step-active">
-            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">05</span><div><span className="miro-step-title">Report + Deep Interaction</span><p className="miro-step-subtitle">verdict / follow-up / agent interaction</p></div></div><span className={`miro-badge ${reportData?.status === "completed" ? "miro-badge-success" : "miro-badge-processing"}`}>{reportData?.status ?? reportTask?.status ?? "pending"}</span></div>
+            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">04</span><div><span className="miro-step-title">Report + Deep Interaction</span><p className="miro-step-subtitle">verdict / follow-up / agent interaction</p></div></div><span className={`miro-badge ${reportData?.status === "completed" ? "miro-badge-success" : "miro-badge-processing"}`}>{reportData?.status ?? reportTask?.status ?? "pending"}</span></div>
             <div className="miro-step-body">
               <p className="miro-api-note">/api/report/generate → /api/report/by-simulation → /api/report/chat → /api/simulation/interview</p>
               <div className="miro-ready-grid">
@@ -871,6 +932,9 @@ export default function SpdmRedesign() {
               <div className="miro-step-actions">
                 <button className="miro-primary-btn" type="button" onClick={generateReport} disabled={!simulationId || isGeneratingReport}>
                   {isGeneratingReport ? "리포트 생성 중" : "리포트 생성"}
+                </button>
+                <button className="miro-primary-btn" type="button" onClick={() => setActiveView("simulation")} disabled={!simulationId}>
+                  시뮬레이션으로 돌아가기
                 </button>
               </div>
               <div className="miro-report-block">
@@ -932,6 +996,8 @@ export default function SpdmRedesign() {
               </div>
             </div>
           </div>
+            </>
+          ) : null}
         </section>
       </div>
 
