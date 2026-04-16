@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Maximize2, Play, RefreshCw } from "lucide-react";
+import { Check, ChevronDown, Play, RefreshCw, Send } from "lucide-react";
 import { scenarios } from "@/lib/sample-data";
 import type {
   MiroFishAction,
@@ -11,6 +11,8 @@ import type {
   MiroFishPrepareStatus,
   MiroFishProfileRealtime,
   MiroFishProject,
+  MiroFishReport,
+  MiroFishReportChatTurn,
   MiroFishRunStatus,
   MiroFishRunStatusDetail,
   MiroFishTask,
@@ -21,6 +23,7 @@ import type {
 type RenderNode = { id: string; label: string; type: string; x: number; y: number; color: string };
 type RenderEdge = { from: string; to: string; label: string };
 type ConsoleLog = { ts: string; message: string };
+type GraphGrowth = { nodes: number; edges: number };
 
 const entityColors = ["#ff7a45", "#1d5fd0", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4", "#f59e0b", "#64748b"];
 
@@ -157,9 +160,22 @@ export default function SpdmRedesign() {
   const [configRealtime, setConfigRealtime] = useState<MiroFishConfigRealtime | null>(null);
   const [runStatus, setRunStatus] = useState<MiroFishRunStatus | null>(null);
   const [runDetail, setRunDetail] = useState<MiroFishRunStatusDetail | null>(null);
+  const [reportTask, setReportTask] = useState<MiroFishTask | null>(null);
+  const [reportData, setReportData] = useState<MiroFishReport | null>(null);
+  const [reportChatHistory, setReportChatHistory] = useState<MiroFishReportChatTurn[]>([]);
+  const [reportQuestion, setReportQuestion] = useState("송파 자영업자와 강남 출퇴근 직장인 관점의 핵심 차이를 요약해줘.");
+  const [interviewPrompt, setInterviewPrompt] = useState("이 정책이 일상에 어떤 영향을 준다고 보나요?");
+  const [interviewResponse, setInterviewResponse] = useState("");
+  const [selectedAgentId, setSelectedAgentId] = useState(0);
+  const [selectedAgentPlatform, setSelectedAgentPlatform] = useState<"twitter" | "reddit">("twitter");
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isAskingReport, setIsAskingReport] = useState(false);
+  const [isInterviewing, setIsInterviewing] = useState(false);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [customRounds, setCustomRounds] = useState(40);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [graphGrowth, setGraphGrowth] = useState<GraphGrowth>({ nodes: 0, edges: 0 });
   const [logs, setLogs] = useState<ConsoleLog[]>([
     { ts: "", message: "MiroFish 기반 서울 정책 반응 트윈 콘솔을 초기화했습니다." },
     { ts: "", message: "Seed input을 기다리는 중입니다." }
@@ -196,8 +212,13 @@ export default function SpdmRedesign() {
     setConfigRealtime(null);
     setRunStatus(null);
     setRunDetail(null);
+    setReportTask(null);
+    setReportData(null);
+    setReportChatHistory([]);
+    setInterviewResponse("");
     setIsRunning(false);
     setIsInitializing(false);
+    setGraphGrowth({ nodes: 0, edges: 0 });
   };
 
   const loadGraphData = async (graphId: string, flowId: number) => {
@@ -209,8 +230,13 @@ export default function SpdmRedesign() {
     const nodeCount = nextGraphData.node_count ?? nextGraphData.nodes?.length ?? 0;
     const edgeCount = nextGraphData.edge_count ?? nextGraphData.edges?.length ?? 0;
     if (graphStatRef.current.nodes !== nodeCount || graphStatRef.current.edges !== edgeCount) {
+      const growth = {
+        nodes: Math.max(0, nodeCount - graphStatRef.current.nodes),
+        edges: Math.max(0, edgeCount - graphStatRef.current.edges)
+      };
+      setGraphGrowth(growth);
       graphStatRef.current = { nodes: nodeCount, edges: edgeCount };
-      addLog(`그래프가 갱신되었습니다: 노드 ${nodeCount}개, 엣지 ${edgeCount}개`);
+      addLog(`그래프가 갱신되었습니다: 노드 ${nodeCount}개, 엣지 ${edgeCount}개${growth.nodes || growth.edges ? ` (+${growth.nodes}/+${growth.edges})` : ""}`);
     }
   };
 
@@ -431,6 +457,11 @@ export default function SpdmRedesign() {
 
   useEffect(() => () => clearPollers(), []);
 
+  useEffect(() => {
+    if (!simulationId) return;
+    void fetchReportBySimulation(simulationId);
+  }, [simulationId]);
+
   async function runSimulation() {
     if (!simulationId) return;
     setIsRunning(true);
@@ -454,6 +485,149 @@ export default function SpdmRedesign() {
     }
   }
 
+  async function fetchReportBySimulation(simId: string) {
+    const response = await fetch(`/api/mirofish/report/by-simulation/${simId}`);
+    const json = await response.json();
+    if (!json?.success) return null;
+    const report = json.data as MiroFishReport;
+    setReportData(report);
+    return report;
+  }
+
+  function startReportPolling(taskId: string, simId: string, flowId: number) {
+    const reportInterval = window.setInterval(async () => {
+      const statusRes = await fetch(`/api/mirofish/report/generate/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simulation_id: simId, task_id: taskId })
+      });
+      const statusJson = await statusRes.json();
+      if (flowId !== flowIdRef.current || !statusJson?.success) return;
+      const nextTask = statusJson.data as MiroFishTask;
+      setReportTask(nextTask);
+      if (nextTask.status === "failed") {
+        addLog(`Report generation 실패: ${nextTask.message ?? nextTask.error ?? "unknown"}`);
+        window.clearInterval(reportInterval);
+        setIsGeneratingReport(false);
+        return;
+      }
+      if (["completed", "success"].includes(nextTask.status ?? "") || nextTask.result?.report_id) {
+        const report = await fetchReportBySimulation(simId);
+        if (report?.report_id) {
+          addLog(`Report 생성 완료: ${report.report_id}`);
+        }
+        window.clearInterval(reportInterval);
+        setIsGeneratingReport(false);
+      }
+    }, 3000);
+    intervalsRef.current.push(reportInterval);
+  }
+
+  async function generateReport() {
+    if (!simulationId) return;
+    setIsGeneratingReport(true);
+    addLog(`Report generation 요청: ${simulationId}`);
+    let startedPolling = false;
+    try {
+      const existing = await fetchReportBySimulation(simulationId);
+      if (existing?.report_id && existing.status === "completed") {
+        addLog(`기존 report 재사용: ${existing.report_id}`);
+        return;
+      }
+      const response = await fetch(`/api/mirofish/report/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simulation_id: simulationId })
+      });
+      const json = await response.json();
+      if (!json?.success) {
+        addLog(`Report generation 실패: ${json?.error ?? "unknown"}`);
+        return;
+      }
+      const task = {
+        task_id: json.data?.task_id as string | undefined,
+        status: json.data?.status as string | undefined,
+        message: json.data?.message as string | undefined,
+        result: { report_id: json.data?.report_id as string | undefined }
+      } satisfies MiroFishTask;
+      setReportTask(task);
+      if (json.data?.already_generated) {
+        await fetchReportBySimulation(simulationId);
+        addLog(`기존 report 연결 완료: ${json.data?.report_id ?? "report"}`);
+        return;
+      }
+      if (task.task_id) {
+        startedPolling = true;
+        startReportPolling(task.task_id, simulationId, flowIdRef.current);
+      }
+    } finally {
+      if (!startedPolling) setIsGeneratingReport(false);
+    }
+  }
+
+  async function askReportAgent() {
+    if (!simulationId || !reportQuestion.trim()) return;
+    setIsAskingReport(true);
+    const history = [...reportChatHistory, { role: "user", content: reportQuestion.trim() } satisfies MiroFishReportChatTurn];
+    setReportChatHistory(history);
+    try {
+      const response = await fetch(`/api/mirofish/report/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ simulation_id: simulationId, message: reportQuestion.trim(), chat_history: history.slice(0, -1) })
+      });
+      const json = await response.json();
+      if (!json?.success) {
+        addLog(`ReportAgent 질의 실패: ${json?.error ?? "unknown"}`);
+        setReportChatHistory((prev) => prev.slice(0, -1));
+        return;
+      }
+      const responseText = String(json.data?.response ?? "");
+      setReportChatHistory((prev) => [...prev, { role: "assistant", content: responseText }]);
+      addLog("ReportAgent 응답 수신");
+      setReportQuestion("");
+    } finally {
+      setIsAskingReport(false);
+    }
+  }
+
+  async function interviewAgent() {
+    if (!simulationId || !interviewPrompt.trim()) return;
+    setIsInterviewing(true);
+    setInterviewResponse("");
+    try {
+      const response = await fetch(`/api/mirofish/simulation/interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          simulation_id: simulationId,
+          agent_id: selectedAgentId,
+          prompt: interviewPrompt.trim(),
+          platform: selectedAgentPlatform,
+          timeout: 90
+        })
+      });
+      const json = await response.json();
+      if (!json?.success) {
+        const message = json?.error ?? json?.data?.error ?? "unknown";
+        addLog(`Persona 인터뷰 실패: ${message}`);
+        setInterviewResponse(`인터뷰 실패: ${message}`);
+        return;
+      }
+      const result = json.data?.result;
+      const responseText =
+        typeof result === "string"
+          ? result
+          : typeof result?.response === "string"
+            ? result.response
+            : JSON.stringify(result, null, 2);
+      setInterviewResponse(responseText);
+      addLog(`Persona 인터뷰 완료: agent ${selectedAgentId}`);
+    } finally {
+      setIsInterviewing(false);
+    }
+  }
+
   const graph = useMemo(() => buildGraphFromData(graphData, active, realtime), [graphData, active, realtime]);
   const entityTypes = useMemo(() => {
     const uniq = new Map<string, string>();
@@ -472,6 +646,13 @@ export default function SpdmRedesign() {
   const platformConfigs = (configObject?.platform_configs ?? {}) as Record<string, unknown>;
   const eventConfig = (configObject?.event_config ?? {}) as Record<string, unknown>;
   const hotTopics = Array.isArray(eventConfig.hot_topics) ? eventConfig.hot_topics.map(String).slice(0, 6) : [active.shortName, active.type, active.region.split("/")[0].trim(), realtime?.areaName ?? active.realtimeArea, "서울 정책", "사회 반응"];
+  const selectedProfile = profiles[selectedAgentId] ?? profiles[0] ?? null;
+
+  useEffect(() => {
+    if (profiles.length && selectedAgentId >= profiles.length) {
+      setSelectedAgentId(0);
+    }
+  }, [profiles, selectedAgentId]);
 
   return (
     <main className="miro-shell">
@@ -480,10 +661,10 @@ export default function SpdmRedesign() {
           <div className="miro-brand"><div className="miro-brand-mark">S</div><strong>Seoul Policy Reaction Twin</strong></div>
         </div>
         <div className="miro-topbar-center">
-          <button className="miro-tab miro-tab-active">시뮬레이션</button>
+          <span className="miro-tab miro-tab-active">시뮬레이션 콘솔</span>
           <span className="miro-section-title">MiroFish Flow</span>
           <span className="miro-phase-dot" />
-          <span className="miro-phase-text">seed → graph → env → simulation</span>
+          <span className="miro-phase-text">seed → graph → env → simulation → report</span>
         </div>
         <div className="miro-topbar-right" />
       </header>
@@ -499,11 +680,13 @@ export default function SpdmRedesign() {
                 </button>
               </div>
               <button className="miro-tool-btn" onClick={() => void startBootstrap(active, realtime)}><RefreshCw size={14} />다시 빌드</button>
-              <button className="miro-icon-btn" aria-label="maximize"><Maximize2 size={16} /></button>
             </div>
           </div>
 
-          <label className="miro-toggle-chip"><span className="miro-switch miro-switch-on"><i /></span>evidence edge 표시</label>
+          <button className="miro-toggle-chip" type="button" onClick={() => setShowEdgeLabels((current) => !current)}>
+            <span className={`miro-switch ${showEdgeLabels ? "miro-switch-on" : ""}`}><i /></span>
+            evidence edge 표시
+          </button>
 
           <svg className="miro-graph-svg" viewBox="0 0 820 620" role="img" aria-label="mirofish graph">
             {graph.edges.map((edge) => {
@@ -515,8 +698,12 @@ export default function SpdmRedesign() {
               return (
                 <g key={`${edge.from}-${edge.to}-${edge.label}`}>
                   <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#c8c8ce" strokeWidth="1.2" />
-                  <rect x={mx - 34} y={my - 9} width="68" height="18" rx="7" fill="rgba(255,255,255,0.94)" />
-                  <text x={mx} y={my + 4} textAnchor="middle" className="miro-edge-label">{edge.label.slice(0, 10)}</text>
+                  {showEdgeLabels ? (
+                    <>
+                      <rect x={mx - 34} y={my - 9} width="68" height="18" rx="7" fill="rgba(255,255,255,0.94)" />
+                      <text x={mx} y={my + 4} textAnchor="middle" className="miro-edge-label">{edge.label.slice(0, 10)}</text>
+                    </>
+                  ) : null}
                 </g>
               );
             })}
@@ -571,6 +758,7 @@ export default function SpdmRedesign() {
               <div className="miro-summary-grid">
                 <div className="miro-summary-card"><span>Node Count</span><strong>{nodeCount}</strong></div>
                 <div className="miro-summary-card"><span>Edge Count</span><strong>{edgeCount}</strong></div>
+                <div className="miro-summary-card"><span>Latest Growth</span><strong>+{graphGrowth.nodes} / +{graphGrowth.edges}</strong></div>
                 <div className="miro-summary-card"><span>Task Status</span><strong>{graphTask?.status ?? "idle"}</strong></div>
                 <div className="miro-summary-card"><span>Graph ID</span><strong>{resolvedGraphId ?? project?.graph_id ?? "pending"}</strong></div>
               </div>
@@ -603,6 +791,15 @@ export default function SpdmRedesign() {
                   </article>
                 ))}
               </div>
+              <span className="miro-tag-label">Initial Activation Sequence</span>
+              <div className="miro-sequence-list">
+                {activationSequence.map((item, index) => (
+                  <div className="miro-sequence-card" key={`${item.handle}-${index}`}>
+                    <div className="miro-sequence-head"><strong>{item.role}</strong><span>{item.handle}</span></div>
+                    <p>{item.message}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -622,6 +819,18 @@ export default function SpdmRedesign() {
                 <strong>Round Progression</strong>
                 <p>각 round에서 사건 인식, 관찰, 태도 갱신, 발화 생성, graph memory write-back이 순차적으로 반영됩니다. 현재 그래프는 simulation 중에도 계속 다시 읽어옵니다.</p>
               </div>
+              <div className="miro-ready-grid">
+                <div className="miro-ready-box"><span>Custom Rounds</span><strong>{customRounds} rounds</strong></div>
+                <div className="miro-ready-box"><span>Graph Memory Update</span><strong>enabled</strong></div>
+                <div className="miro-ready-box"><span>Actions Collected</span><strong>{actions.length}</strong></div>
+              </div>
+              <div className="miro-round-input-wrap" style={{ marginTop: 14 }}>
+                <input className="miro-round-input" type="number" min={1} max={72} value={customRounds} onChange={(e) => setCustomRounds(Number(e.target.value) || 1)} />
+                <small>rounds</small>
+              </div>
+              <button className="miro-run-btn" onClick={runSimulation} disabled={!simulationId || isRunning || !(prepareStatus?.status === "ready" || prepareStatus?.status === "completed")}>
+                <span>{isRunning ? "시뮬레이션 실행 중" : "듀얼 플랫폼 시뮬레이션 시작"}</span><Play size={16} />
+              </button>
               <div className="miro-sequence-list">
                 {recentActions.length ? recentActions.map((action, index) => (
                   <div className="miro-sequence-card" key={`${action.id ?? action.timestamp}-${index}`}>
@@ -636,22 +845,76 @@ export default function SpdmRedesign() {
           </div>
 
           <div className="miro-step-card miro-step-active">
-            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">05</span><div><span className="miro-step-title">Report + Deep Interaction Ready</span><p className="miro-step-subtitle">verdict / follow-up / agent interaction</p></div></div><span className={`miro-badge ${(prepareStatus?.status === "ready" || prepareStatus?.status === "completed") ? "miro-badge-success" : "miro-badge-processing"}`}>{(prepareStatus?.status === "ready" || prepareStatus?.status === "completed") ? "ready" : "pending"}</span></div>
+            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">05</span><div><span className="miro-step-title">Report + Deep Interaction</span><p className="miro-step-subtitle">verdict / follow-up / agent interaction</p></div></div><span className={`miro-badge ${reportData?.status === "completed" ? "miro-badge-success" : "miro-badge-processing"}`}>{reportData?.status ?? reportTask?.status ?? "pending"}</span></div>
             <div className="miro-step-body">
-              <p className="miro-api-note">Report view and agent follow-up are gated after simulation rounds accumulate enough evidence.</p>
+              <p className="miro-api-note">/api/report/generate → /api/report/by-simulation → /api/report/chat → /api/simulation/interview</p>
               <div className="miro-ready-grid">
-                <div className="miro-ready-box"><span>Custom Rounds</span><strong>{customRounds} rounds</strong></div>
-                <div className="miro-ready-box"><span>Graph Memory Update</span><strong>enabled</strong></div>
-                <div className="miro-ready-box"><span>Actions Collected</span><strong>{actions.length}</strong></div>
+                <div className="miro-ready-box"><span>Report ID</span><strong>{reportData?.report_id ?? (typeof reportTask?.result?.report_id === "string" ? reportTask.result.report_id : "pending")}</strong></div>
+                <div className="miro-ready-box"><span>Report Status</span><strong>{reportData?.status ?? reportTask?.status ?? "pending"}</strong></div>
+                <div className="miro-ready-box"><span>Interview Target</span><strong>{selectedProfile?.name ?? "pending"}</strong></div>
               </div>
-              <label className="miro-check-row"><input type="checkbox" checked readOnly /><span>enable_graph_memory_update 고정 활성화</span></label>
-              <div className="miro-round-input-wrap" style={{ marginTop: 14 }}>
-                <input className="miro-round-input" type="number" min={1} max={72} value={customRounds} onChange={(e) => setCustomRounds(Number(e.target.value) || 1)} />
-                <small>rounds</small>
+              <div className="miro-step-actions">
+                <button className="miro-primary-btn" type="button" onClick={generateReport} disabled={!simulationId || isGeneratingReport}>
+                  {isGeneratingReport ? "리포트 생성 중" : "리포트 생성"}
+                </button>
               </div>
-              <button className="miro-run-btn" onClick={runSimulation} disabled={!simulationId || isRunning || !(prepareStatus?.status === "ready" || prepareStatus?.status === "completed")}>
-                <span>{isRunning ? "시뮬레이션 실행 중" : "듀얼 플랫폼 시뮬레이션 시작"}</span><Play size={16} />
-              </button>
+              <div className="miro-report-block">
+                <div className="miro-report-header">
+                  <strong>{reportData?.outline?.title ?? "Final Report"}</strong>
+                  <span>{reportData?.completed_at ? formatClock(reportData.completed_at) : "not generated"}</span>
+                </div>
+                <p className="miro-report-summary">{reportData?.outline?.summary ?? "시뮬레이션을 실행한 뒤 report를 생성하면 executive summary와 evidence 기반 verdict가 표시됩니다."}</p>
+                <div className="miro-report-sections">
+                  {(reportData?.outline?.sections ?? []).slice(0, 6).map((section, index) => (
+                    <article className="miro-report-section" key={`${section.title}-${index}`}>
+                      <strong>{section.title}</strong>
+                      <p>{section.content}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+              <div className="miro-chat-block">
+                <div className="miro-chat-header">
+                  <strong>ReportAgent</strong>
+                  <span>{reportChatHistory.length} turns</span>
+                </div>
+                <div className="miro-chat-log">
+                  {reportChatHistory.length ? reportChatHistory.map((turn, index) => (
+                    <div className={`miro-chat-turn miro-chat-turn-${turn.role}`} key={`${turn.role}-${index}`}>
+                      <span>{turn.role === "user" ? "질문" : "응답"}</span>
+                      <p>{turn.content}</p>
+                    </div>
+                  )) : <div className="miro-chat-empty">리포트 생성 후 후속 질문을 보내면 ReportAgent 응답이 여기에 누적됩니다.</div>}
+                </div>
+                <div className="miro-chat-input-row">
+                  <textarea className="miro-textarea" value={reportQuestion} onChange={(e) => setReportQuestion(e.target.value)} rows={3} />
+                  <button className="miro-primary-btn" type="button" onClick={askReportAgent} disabled={!simulationId || isAskingReport || !reportData?.report_id}>
+                    <Send size={14} />{isAskingReport ? "질의 중" : "ReportAgent 질문"}
+                  </button>
+                </div>
+              </div>
+              <div className="miro-chat-block">
+                <div className="miro-chat-header">
+                  <strong>Persona Interview</strong>
+                  <span>{selectedProfile?.handle ?? "@agent"}</span>
+                </div>
+                <div className="miro-interview-controls">
+                  <select className="miro-select" value={selectedAgentId} onChange={(e) => setSelectedAgentId(Number(e.target.value))}>
+                    {profiles.slice(0, 24).map((profile, index) => <option key={profile.id} value={index}>{profile.name}</option>)}
+                  </select>
+                  <select className="miro-select" value={selectedAgentPlatform} onChange={(e) => setSelectedAgentPlatform(e.target.value as "twitter" | "reddit")}>
+                    <option value="twitter">Info Plaza</option>
+                    <option value="reddit">Topic Community</option>
+                  </select>
+                </div>
+                <textarea className="miro-textarea" value={interviewPrompt} onChange={(e) => setInterviewPrompt(e.target.value)} rows={3} />
+                <button className="miro-primary-btn" type="button" onClick={interviewAgent} disabled={!simulationId || isInterviewing || !selectedProfile}>
+                  {isInterviewing ? "인터뷰 중" : "에이전트 인터뷰"}
+                </button>
+                <div className="miro-interview-response">
+                  {interviewResponse || "시뮬레이션이 진행된 뒤 선택한 persona에게 왜 그렇게 반응했는지 직접 물을 수 있습니다."}
+                </div>
+              </div>
             </div>
           </div>
         </section>

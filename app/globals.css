@@ -758,6 +758,145 @@ input[type="number"] {
   opacity: 0.65;
 }
 
+.miro-select,
+.miro-textarea {
+  width: 100%;
+  border: 1px solid #dedee5;
+  border-radius: 10px;
+  background: #fff;
+  color: #101216;
+}
+
+.miro-select {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.miro-textarea {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.miro-report-block,
+.miro-chat-block {
+  margin-top: 16px;
+  border: 1px solid #ececf2;
+  border-radius: 14px;
+  background: #fafafc;
+  padding: 16px;
+}
+
+.miro-report-header,
+.miro-chat-header,
+.miro-interview-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.miro-report-header span,
+.miro-chat-header span {
+  color: #8d9098;
+  font-size: 12px;
+}
+
+.miro-report-summary {
+  margin: 12px 0 0;
+  color: #5f646e;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.miro-report-sections {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.miro-report-section {
+  border: 1px solid #ececf2;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+}
+
+.miro-report-section strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.miro-report-section p,
+.miro-chat-turn p,
+.miro-chat-empty,
+.miro-interview-response {
+  margin: 0;
+  color: #5f646e;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.miro-chat-log {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.miro-chat-turn {
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.miro-chat-turn span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #7c818b;
+}
+
+.miro-chat-turn-user {
+  background: #fff;
+  border: 1px solid #ececf2;
+}
+
+.miro-chat-turn-assistant {
+  background: #f1f7ff;
+  border: 1px solid #dbe8fb;
+}
+
+.miro-chat-empty {
+  border: 1px dashed #d9dce3;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.miro-chat-input-row {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.miro-interview-controls {
+  margin: 14px 0 10px;
+}
+
+.miro-interview-response {
+  margin-top: 12px;
+  border: 1px solid #ececf2;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+  min-height: 96px;
+}
+
 .miro-badge-idle {
   background: #f3f4f6;
   color: #747983;

@@ -214,3 +214,30 @@ export type MiroFishRunStatusDetail = MiroFishRunStatus & {
   all_actions?: MiroFishAction[];
   recent_actions?: MiroFishAction[];
 };
+
+export type MiroFishReportSection = {
+  title: string;
+  content: string;
+};
+
+export type MiroFishReport = {
+  report_id?: string;
+  simulation_id?: string;
+  graph_id?: string;
+  simulation_requirement?: string;
+  status?: string;
+  outline?: {
+    title?: string;
+    summary?: string;
+    sections?: MiroFishReportSection[];
+  } | null;
+  markdown_content?: string;
+  created_at?: string;
+  completed_at?: string;
+  error?: string | null;
+};
+
+export type MiroFishReportChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
