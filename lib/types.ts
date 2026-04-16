@@ -140,6 +140,7 @@ export type MiroFishTask = {
   message?: string;
   progress?: number;
   result?: Record<string, unknown>;
+  error?: string;
 };
 
 export type MiroFishProject = {

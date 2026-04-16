@@ -147,7 +147,9 @@ export default function SpdmRedesign() {
   const [realtime, setRealtime] = useState<SeoulRealtimeSnapshot | null>(null);
   const [ontology, setOntology] = useState<MiroFishOntology | null>(null);
   const [project, setProject] = useState<MiroFishProject | null>(null);
+  const [bootstrapTask, setBootstrapTask] = useState<MiroFishTask | null>(null);
   const [graphTask, setGraphTask] = useState<MiroFishTask | null>(null);
+  const [resolvedGraphId, setResolvedGraphId] = useState<string | null>(null);
   const [graphData, setGraphData] = useState<MiroFishGraphData | null>(null);
   const [simulationId, setSimulationId] = useState<string | null>(null);
   const [prepareStatus, setPrepareStatus] = useState<MiroFishPrepareStatus | null>(null);
@@ -295,7 +297,9 @@ export default function SpdmRedesign() {
     runLogRef.current = { twitter: 0, reddit: 0 };
     setOntology(null);
     setProject(null);
+    setBootstrapTask(null);
     setGraphTask(null);
+    setResolvedGraphId(null);
     setGraphData(null);
     setSimulationId(null);
     setPrepareStatus(null);
@@ -318,30 +322,69 @@ export default function SpdmRedesign() {
         addLog(`Bootstrap 실패: ${json?.error ?? "unknown error"}`);
         return;
       }
-      setOntology(json.data?.ontology ?? null);
-      setProject({ project_id: json.data.project_id, graph_build_task_id: json.data.task_id });
-      setGraphTask({ task_id: json.data.task_id, status: "processing", message: "Graph build started", progress: 0 });
-      addLog(`Ontology 생성 완료, graph build task 시작: ${json.data.task_id}`);
+      const projectId = json.data.project_id as string;
+      const bootstrapTaskId = json.data.bootstrap_task_id as string;
+      setProject({ project_id: projectId });
+      setBootstrapTask({ task_id: bootstrapTaskId, status: "processing", message: "Bootstrap started", progress: 0 });
+      addLog(`Bootstrap task 시작: ${bootstrapTaskId}`);
 
+      let linkedGraphTaskId: string | null = null;
       const graphInterval = window.setInterval(async () => {
-        const [projectRes, taskRes] = await Promise.all([
-          fetch(`/api/mirofish/graph/project/${json.data.project_id}`),
-          fetch(`/api/mirofish/graph/task/${json.data.task_id}`)
+        const [projectRes, bootstrapRes] = await Promise.all([
+          fetch(`/api/mirofish/graph/project/${projectId}`),
+          fetch(`/api/mirofish/spdm/bootstrap/task/${bootstrapTaskId}`)
         ]);
-        const [projectJson, taskJson] = await Promise.all([projectRes.json(), taskRes.json()]);
+        const [projectJson, bootstrapJson] = await Promise.all([projectRes.json(), bootstrapRes.json()]);
         if (flowId !== flowIdRef.current) return;
         if (projectJson?.success) {
           const projectData = projectJson.data as MiroFishProject;
           setProject(projectData);
-          if (projectData.graph_id) void loadGraphData(projectData.graph_id, flowId);
+          if (projectData.ontology) setOntology(projectData.ontology);
+          if (projectData.graph_id) {
+            setResolvedGraphId(projectData.graph_id);
+            void loadGraphData(projectData.graph_id, flowId);
+          }
         }
-        if (taskJson?.success) {
-          const nextTask = taskJson.data as MiroFishTask;
-          setGraphTask(nextTask);
-          if (["completed", "success"].includes(nextTask.status ?? "") && projectJson?.data?.graph_id) {
-            addLog(`Graph build 완료: ${projectJson.data.graph_id}`);
+        if (bootstrapJson?.success) {
+          const nextBootstrapTask = bootstrapJson.data as MiroFishTask;
+          setBootstrapTask(nextBootstrapTask);
+          if (nextBootstrapTask.status === "failed") {
+            addLog(`Bootstrap 실패: ${nextBootstrapTask.message ?? nextBootstrapTask.error ?? "unknown error"}`);
             window.clearInterval(graphInterval);
-            await createSimulationFlow(json.data.project_id as string, projectJson.data.graph_id as string, flowId);
+            return;
+          }
+
+          const nextGraphTaskId =
+            (nextBootstrapTask.result?.graph_task_id as string | undefined) ??
+            (projectJson?.data?.graph_build_task_id as string | undefined);
+
+          if (nextGraphTaskId && linkedGraphTaskId !== nextGraphTaskId) {
+            linkedGraphTaskId = nextGraphTaskId;
+            setGraphTask({ task_id: nextGraphTaskId, status: "processing", message: "Graph build started", progress: 55 });
+            addLog(`Graph build task 연결: ${nextGraphTaskId}`);
+          }
+
+          if (nextGraphTaskId) {
+            const graphTaskRes = await fetch(`/api/mirofish/graph/task/${nextGraphTaskId}`);
+            const graphTaskJson = await graphTaskRes.json();
+            if (flowId !== flowIdRef.current) return;
+            if (graphTaskJson?.success) {
+              const nextTask = graphTaskJson.data as MiroFishTask;
+              setGraphTask(nextTask);
+              const nextGraphId =
+                (nextTask.result?.graph_id as string | undefined) ??
+                (projectJson?.data?.graph_id as string | undefined) ??
+                null;
+              if (nextGraphId) {
+                setResolvedGraphId(nextGraphId);
+                void loadGraphData(nextGraphId, flowId);
+              }
+              if (["completed", "success"].includes(nextTask.status ?? "") && nextGraphId) {
+                addLog(`Graph build 완료: ${nextGraphId}`);
+                window.clearInterval(graphInterval);
+                await createSimulationFlow(projectId, nextGraphId, flowId);
+              }
+            }
           }
         }
       }, 2500);
@@ -395,7 +438,7 @@ export default function SpdmRedesign() {
       }
       setRunStatus(json.data as MiroFishRunStatus);
       addLog(`Simulation running: ${simulationId}`);
-      startRunPolling(simulationId, project?.graph_id ?? null, flowIdRef.current);
+      startRunPolling(simulationId, resolvedGraphId ?? project?.graph_id ?? null, flowIdRef.current);
     } finally {
       setIsRunning(false);
     }
@@ -505,6 +548,8 @@ export default function SpdmRedesign() {
                 <div className="miro-id-item"><span>Forecast Question</span><strong>{active.objective}</strong></div>
                 <div className="miro-id-item"><span>Realtime Area</span><strong>{realtime?.areaName ?? active.realtimeArea}</strong></div>
                 <div className="miro-id-item"><span>Project ID</span><strong>{project?.project_id ?? buildStableId("proj", active.id)}</strong></div>
+                <div className="miro-id-item"><span>Bootstrap Task</span><strong>{bootstrapTask?.task_id ?? "pending"}</strong></div>
+                <div className="miro-id-item"><span>Bootstrap Status</span><strong>{bootstrapTask?.status ?? "pending"}</strong></div>
               </div>
             </div>
           </div>
@@ -518,7 +563,7 @@ export default function SpdmRedesign() {
                 <div className="miro-summary-card"><span>Node Count</span><strong>{nodeCount}</strong></div>
                 <div className="miro-summary-card"><span>Edge Count</span><strong>{edgeCount}</strong></div>
                 <div className="miro-summary-card"><span>Task Status</span><strong>{graphTask?.status ?? "idle"}</strong></div>
-                <div className="miro-summary-card"><span>Graph ID</span><strong>{project?.graph_id ?? "pending"}</strong></div>
+                <div className="miro-summary-card"><span>Graph ID</span><strong>{resolvedGraphId ?? project?.graph_id ?? "pending"}</strong></div>
               </div>
               <span className="miro-tag-label">엔티티 유형</span>
               <div className="miro-tag-list">{(ontology?.entity_types ?? []).map((tag) => <span className="miro-tag" key={tag}>{tag}</span>)}</div>

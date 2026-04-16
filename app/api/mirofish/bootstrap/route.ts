@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { fetchMiroFish } from "@/lib/mirofish-client";
 import type { Scenario, SeoulRealtimeSnapshot } from "@/lib/types";
 
@@ -12,10 +12,10 @@ function buildPolicyDocument(scenario: Scenario, realtime: SeoulRealtimeSnapshot
     `# ${scenario.name}`,
     "",
     "## Policy Overview",
-    `- 정책 유형: ${scenario.type}`,
-    `- 대상 권역: ${scenario.region}`,
-    `- 운영 시간: ${scenario.timeWindow}`,
-    `- 대상 집단: ${scenario.personas.join(", ")}`,
+    `- Policy Type: ${scenario.type}`,
+    `- Region: ${scenario.region}`,
+    `- Time Window: ${scenario.timeWindow}`,
+    `- Target Groups: ${scenario.personas.join(", ")}`,
     "",
     "## Objective",
     scenario.objective,
@@ -47,102 +47,33 @@ function buildPolicyDocument(scenario: Scenario, realtime: SeoulRealtimeSnapshot
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as BootstrapRequest;
-
     if (!body?.scenario) {
       return NextResponse.json({ success: false, error: "scenario is required" }, { status: 400 });
     }
 
     const { scenario, realtime } = body;
-    const policyDocument = buildPolicyDocument(scenario, realtime ?? null);
-
-    const formData = new FormData();
-    formData.append("project_name", `SPDM ${scenario.shortName}`);
-    formData.append(
-      "simulation_requirement",
-      [
-        `Simulate both structural effects and social reactions in Seoul when ${scenario.name} is implemented.`,
-        `Forecast goal: ${scenario.objective}`,
-        `Target region: ${scenario.region}`,
-        `Target groups: ${scenario.personas.join(", ")}`
-      ].join("\n")
-    );
-    formData.append(
-      "additional_context",
-      JSON.stringify(
-        {
-          source: "spdm-ui",
-          realtime,
-          judgement: scenario.judgement
-        },
-        null,
-        2
-      )
-    );
-    formData.append(
-      "files",
-      new Blob([policyDocument], { type: "text/markdown" }),
-      `${scenario.id}.md`
-    );
-
-    const ontologyResponse = await fetchMiroFish("/api/graph/ontology/generate", {
-      method: "POST",
-      body: formData
-    });
-    const ontologyJson = await ontologyResponse.json();
-
-    if (!ontologyResponse.ok || !ontologyJson?.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: ontologyJson?.error ?? "Failed to generate ontology"
-        },
-        { status: ontologyResponse.status || 500 }
-      );
-    }
-
-    const projectId = ontologyJson.data?.project_id as string | undefined;
-    if (!projectId) {
-      return NextResponse.json({ success: false, error: "project_id missing from ontology response" }, { status: 500 });
-    }
-
-    const buildResponse = await fetchMiroFish("/api/graph/build", {
+    const response = await fetchMiroFish("/api/spdm/bootstrap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        project_id: projectId,
+        project_name: `SPDM ${scenario.shortName}`,
         graph_name: `SPDM ${scenario.shortName}`,
-        force: true
+        simulation_requirement: [
+          `Simulate both structural effects and social reactions in Seoul when ${scenario.name} is implemented.`,
+          `Forecast goal: ${scenario.objective}`,
+          `Target region: ${scenario.region}`,
+          `Target groups: ${scenario.personas.join(", ")}`
+        ].join("\n"),
+        additional_context: JSON.stringify({ source: "spdm-ui", realtime, judgement: scenario.judgement }, null, 2),
+        policy_document: buildPolicyDocument(scenario, realtime ?? null)
       })
     });
-    const buildJson = await buildResponse.json();
 
-    if (!buildResponse.ok || !buildJson?.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: buildJson?.error ?? "Failed to start graph build",
-          project_id: projectId,
-          ontology: ontologyJson.data?.ontology
-        },
-        { status: buildResponse.status || 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        project_id: projectId,
-        task_id: buildJson.data?.task_id,
-        ontology: ontologyJson.data?.ontology,
-        analysis_summary: ontologyJson.data?.analysis_summary
-      }
-    });
+    const json = await response.json();
+    return NextResponse.json(json, { status: response.status });
   } catch (error) {
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown bootstrap error"
-      },
+      { success: false, error: error instanceof Error ? error.message : "Unknown bootstrap error" },
       { status: 500 }
     );
   }
