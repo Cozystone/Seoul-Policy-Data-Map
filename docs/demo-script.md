@@ -21,7 +21,7 @@ docker compose up -d
 3. Pull local models:
 
 ```bash
-docker exec spdm-ollama ollama pull qwen2.5:32b
+docker exec spdm-ollama ollama pull qwen2.5:7b
 docker exec spdm-ollama ollama pull nomic-embed-text
 ```
 

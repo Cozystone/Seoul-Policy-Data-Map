@@ -62,13 +62,13 @@ Services:
 - SPDM UI: `http://localhost:3000`
 - MiroFish-Offline UI: `http://localhost:3002`
 - MiroFish backend: `http://localhost:5001`
-- Neo4j Browser: `http://localhost:7474`
+- Neo4j Browser: `http://localhost:7475`
 - Ollama: `http://localhost:11434`
 
 Pull recommended local models:
 
 ```bash
-docker exec spdm-ollama ollama pull qwen2.5:32b
+docker exec spdm-ollama ollama pull qwen2.5:7b
 docker exec spdm-ollama ollama pull nomic-embed-text
 ```
 
