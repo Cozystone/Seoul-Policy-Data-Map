@@ -6,6 +6,10 @@ dist
 .env.local
 .env.*.local
 *.log
+__pycache__
+*.pyc
 tsconfig.tsbuildinfo
 vercel.json
 .vercel
+.upstream-candidates
+vendor/mirofish/backend/uploads

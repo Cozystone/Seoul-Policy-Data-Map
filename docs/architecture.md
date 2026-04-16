@@ -1,37 +1,52 @@
 # Architecture
 
-SPDM is currently a frontend-first prototype. The first deployable slice focuses on policy rehearsal UX and deterministic sample outputs.
+Seoul Policy Reaction Twin is an AGPL prototype built on top of actual MiroFish-Offline source. The public UI is a Next.js control room, while the social reaction simulation layer is grounded in the vendored MiroFish-Offline backend under `vendor/mirofish`.
 
-## Current Runtime
+## Runtime Layers
 
-- Next.js renders the dashboard.
-- React state selects one of three sample scenarios.
-- `app/api/seoul/realtime/route.ts` calls the Seoul real-time city data adapter.
-- `app/api/simulation/run/route.ts` executes a deterministic policy rehearsal run.
-- `lib/seoul-realtime.ts` normalizes crowding, weather, and traffic signals, and falls back to sample data when `SEOUL_OPEN_API_KEY` is not configured or an upstream call fails.
-- `lib/simulation.ts` combines scenario parameters and city signals into run scores, verdict grades, reaction scores, and mitigation text.
-- Derived metrics are calculated in `app/page.tsx` from scenario controls and the current city snapshot.
-- Recharts renders the Reaction River.
-- SVG and CSS render the Impact Graph and Persona Cluster.
+### 1. SPDM UI Layer
 
-## Planned Backend
+- Next.js renders the Seoul policy control room.
+- `app/spdm-redesign.tsx` is the current console UI.
+- `app/api/seoul/realtime/route.ts` normalizes Seoul realtime city data with fallback.
+- `app/api/simulation/run/route.ts` remains a lightweight UI fallback run path.
 
-The intended production architecture adds a FastAPI ingestion and simulation backend:
+### 2. MiroFish Core Layer
 
-- `ingestion/realtime_city`: place-by-place polling for Seoul real-time city data. The frontend prototype already includes a lightweight Next.js server adapter for this source.
-- `ingestion/open_data`: CSV/API ingestion for Seoul Open Data Plaza datasets.
-- `ingestion/documents`: HTML, PDF, TXT, and Markdown policy document parsing.
-- `ingestion/reactions`: official news/RSS and manually governed community adapters.
-- `simulation/world_seed`: structured scenario payloads for a policy reaction model.
-- `simulation/personas`: deterministic agent generation by region and stakeholder type.
-- `api`: scenario run, report retrieval, and evidence trace endpoints.
+- `vendor/mirofish/backend/app/api/graph.py`: document upload, ontology, graph build.
+- `vendor/mirofish/backend/app/api/simulation.py`: create, prepare, start, status, interview routes.
+- `vendor/mirofish/backend/app/api/report.py`: report generation.
+- `vendor/mirofish/backend/app/services/simulation_runner.py`: OASIS simulation subprocess manager.
+- `vendor/mirofish/backend/app/services/oasis_profile_generator.py`: OASIS persona profile format.
+- `vendor/mirofish/backend/app/services/simulation_config_generator.py`: time, event, agent, and platform simulation configuration.
+- `vendor/mirofish/backend/app/storage/neo4j_storage.py`: Neo4j-backed graph memory.
 
-## Design Principles
+### 3. Seoul Adapter Layer
 
-- Keep raw input data separate from normalized policy objects.
-- Show policy impact and social reaction with similar visual weight.
-- Make every verdict traceable to data sources and assumptions.
-- Treat online/community collection as a governed adapter layer with robots/TOS review.
+- `vendor/mirofish/backend/app/services/spdm_seoul_adapter.py`: Seoul policy world seed, entity mapping, persona mapping, simulation config, JSON output, Markdown report.
+- `vendor/mirofish/backend/app/api/spdm.py`: `/api/spdm/world-seed` route.
+- `vendor/mirofish/backend/scripts/run_spdm_policy_rehearsal.py`: CLI path for local SPDM rehearsal artifact generation and optional core execution.
+
+## Working Flow
+
+1. Input Seoul policy document, city state, CSV-derived metrics, and external reaction signals.
+2. SPDM adapter creates a MiroFish-compatible `spdm_world_seed.json`.
+3. Adapter maps Seoul population groups to MiroFish `EntityNode`, `OasisAgentProfile`, and `AgentActivityConfig`.
+4. Adapter writes `simulation_config.json`, `reddit_profiles.json`, `twitter_profiles.csv`, and `state.json` into the MiroFish simulation directory.
+5. With Neo4j/Ollama available, the existing MiroFish `SimulationRunner.start_simulation()` runs the OASIS pipeline.
+6. Outputs are split into structural externalities and social reaction.
+7. SPDM UI displays policy input, current situation, impact graph, reaction river, verdict, and mitigation recommendations.
+
+## Seoul Data Layer
+
+- Realtime city data: `lib/seoul-realtime.ts` and MiroFish adapter payloads support place-by-place polling.
+- Regular data: CSV samples live in `samples/seoul/regular-metrics-sample.csv`.
+- Policy documents: Markdown samples live in `samples/policies/`.
+- External reactions: manual RSS/community JSON samples live in `samples/reactions/`.
+
+## Storage Model
+
+Relational storage is represented in the SPDM data model docs. Graph storage is implemented by MiroFish-Offline's Neo4j layer and uses the SPDM ontology: `Policy`, `Region`, `Place`, `PopulationGroup`, `Metric`, `Event`, `Reaction`, `Document`.
 
 ## Seoul Realtime API Notes
 
@@ -43,4 +58,4 @@ The citydata API returns one area per call. Production polling should queue targ
 
 ## Simulation Run Notes
 
-The current simulation is deterministic and explainable. It is not a predictive model. It uses policy intensity, disruption, benefit clarity, persona sensitivity, evidence strength, novelty, and the latest city signal snapshot to produce a rehearsal verdict. This gives a working execution path now while leaving room for a future agent-based simulator or graph model.
+The Next.js simulation API is only a fallback UI path. The required MiroFish-based path is now in `vendor/mirofish/backend/app/services/spdm_seoul_adapter.py` and can delegate to `SimulationRunner.start_simulation()`.

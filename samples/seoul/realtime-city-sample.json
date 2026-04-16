@@ -1,0 +1,20 @@
+{
+  "areaName": "광화문·덕수궁",
+  "source": "sample",
+  "updatedAt": "2026-04-16T09:00:00+09:00",
+  "crowding": {
+    "level": "보통",
+    "message": "보행 흐름은 안정적이나 관광객 체류가 증가하는 시간대입니다.",
+    "score": 62
+  },
+  "weather": {
+    "temperatureC": 18,
+    "condition": "맑음",
+    "pm10": 42
+  },
+  "mobility": {
+    "roadTrafficLevel": "서행",
+    "roadTrafficScore": 58,
+    "subwayLine": "1호선 / 5호선"
+  }
+}

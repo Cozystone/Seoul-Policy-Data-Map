@@ -1,0 +1,22 @@
+{
+  "simulation_id": "spdm_gangnam_night_crowding",
+  "policy_name": "강남역 심야 혼잡 완화 확대",
+  "objective": "심야 귀가 시간대 보행 혼잡과 환승 대기 부담을 낮춘다.",
+  "regions": ["강남", "서초", "송파"],
+  "target_groups": ["직장인", "자영업자", "관광객", "교통약자"],
+  "time_window": "2026-06-01 18:00 ~ 2026-06-03 23:00",
+  "policy_document": "# 강남역 심야 혼잡 완화 확대\n강남역과 인접 환승권역의 야간 보행 혼잡을 낮추고 귀가 시간대 대중교통 접근성을 높인다.",
+  "current_city_state": {
+    "crowding": "보통",
+    "mobility_load": 81,
+    "weather": "맑음",
+    "complaint_velocity": 54
+  },
+  "external_signals": [
+    {
+      "source": "manual-news",
+      "title": "상권 기대와 주민 소음 우려",
+      "summary": "심야 셔틀과 정류장 분산에는 기대가 있으나 주거지 소음 민원이 예상된다."
+    }
+  ]
+}

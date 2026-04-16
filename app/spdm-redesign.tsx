@@ -343,7 +343,8 @@ export default function SpdmRedesign() {
         </div>
         <nav>
           <a href="https://www.seoul.go.kr">Seoul</a>
-          <a href="https://github.com/Cozystone/Seoul-Policy-Data-Map">GitHub</a>
+          <a href="https://github.com/Cozystone/Seoul-Policy-Data-Map">Source</a>
+          <a href="/LICENSE.txt">License</a>
           <a href="/NOTICE.md">Notice</a>
         </nav>
       </header>

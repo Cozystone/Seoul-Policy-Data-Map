@@ -1,0 +1,9 @@
+date,region,metric,value,unit,source
+2026-04-16,강남구,footfall_index,88,index,sample
+2026-04-16,강남구,card_spend_index,74,index,sample
+2026-04-16,강남구,mobility_load,81,index,sample
+2026-04-16,중구,footfall_index,72,index,sample
+2026-04-16,중구,card_spend_index,69,index,sample
+2026-04-16,중구,rainfall,0,mm,sample
+2026-04-16,종로구,welfare_access_gap,34,index,sample
+2026-04-16,서초구,mobility_vulnerable_delay,19,minutes,sample
