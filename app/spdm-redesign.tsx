@@ -20,6 +20,7 @@ import type {
 
 type RenderNode = { id: string; label: string; type: string; x: number; y: number; color: string };
 type RenderEdge = { from: string; to: string; label: string };
+type ConsoleLog = { ts: string; message: string };
 
 const entityColors = ["#ff7a45", "#1d5fd0", "#8b5cf6", "#10b981", "#ef4444", "#06b6d4", "#f59e0b", "#64748b"];
 
@@ -157,9 +158,9 @@ export default function SpdmRedesign() {
   const [customRounds, setCustomRounds] = useState(40);
   const [isInitializing, setIsInitializing] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [logs, setLogs] = useState<string[]>([
-    "MiroFish 기반 서울 정책 반응 트윈 콘솔을 초기화했습니다.",
-    "Seed input을 기다리는 중입니다."
+  const [logs, setLogs] = useState<ConsoleLog[]>([
+    { ts: "", message: "MiroFish 기반 서울 정책 반응 트윈 콘솔을 초기화했습니다." },
+    { ts: "", message: "Seed input을 기다리는 중입니다." }
   ]);
 
   const intervalsRef = useRef<number[]>([]);
@@ -169,7 +170,7 @@ export default function SpdmRedesign() {
   const runLogRef = useRef({ twitter: 0, reddit: 0 });
 
   const addLog = (message: string) => {
-    setLogs((prev) => [`${formatClock(new Date().toISOString())} ${message}`, ...prev.slice(0, 16)]);
+    setLogs((prev) => [{ ts: new Date().toISOString(), message }, ...prev.slice(0, 16)]);
   };
 
   const clearPollers = () => {
@@ -604,7 +605,14 @@ export default function SpdmRedesign() {
 
       <section className="miro-system-log">
         <div className="miro-log-header"><span>시스템 대시보드</span><span>{simulationId ?? project?.project_id ?? buildStableId("proj", active.id)}</span></div>
-        <div className="miro-log-body">{logs.map((log, index) => <div className="miro-log-line" key={`${log}-${index}`}><span>{formatClock(new Date().toISOString())}</span><span>{log}</span></div>)}</div>
+        <div className="miro-log-body">
+          {logs.map((log, index) => (
+            <div className="miro-log-line" key={`${log.ts}-${index}`}>
+              <span>{formatClock(log.ts)}</span>
+              <span>{log.message}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </main>
   );
