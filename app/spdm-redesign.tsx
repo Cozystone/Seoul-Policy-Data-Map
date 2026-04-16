@@ -41,6 +41,19 @@ function graphTypeOf(labels?: string[]) {
   return labels?.find((label) => label !== "Entity") ?? "Entity";
 }
 
+function normalizeTag(value: unknown) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.name === "string") return record.name;
+    if (typeof record.label === "string") return record.label;
+    if (typeof record.type === "string") return record.type;
+    if (typeof record.description === "string") return record.description;
+  }
+  return "Unknown";
+}
+
 function buildGraphFromData(graphData: MiroFishGraphData | null, active: Scenario, realtime: SeoulRealtimeSnapshot | null) {
   if (!graphData?.nodes?.length) {
     return {
@@ -647,6 +660,8 @@ export default function SpdmRedesign() {
   const eventConfig = (configObject?.event_config ?? {}) as Record<string, unknown>;
   const hotTopics = Array.isArray(eventConfig.hot_topics) ? eventConfig.hot_topics.map(String).slice(0, 6) : [active.shortName, active.type, active.region.split("/")[0].trim(), realtime?.areaName ?? active.realtimeArea, "서울 정책", "사회 반응"];
   const selectedProfile = profiles[selectedAgentId] ?? profiles[0] ?? null;
+  const ontologyEntityTags = useMemo(() => (ontology?.entity_types ?? []).map(normalizeTag), [ontology]);
+  const ontologyEdgeTags = useMemo(() => (ontology?.edge_types ?? []).map(normalizeTag), [ontology]);
 
   useEffect(() => {
     if (profiles.length && selectedAgentId >= profiles.length) {
@@ -763,9 +778,9 @@ export default function SpdmRedesign() {
                 <div className="miro-summary-card"><span>Graph ID</span><strong>{resolvedGraphId ?? project?.graph_id ?? "pending"}</strong></div>
               </div>
               <span className="miro-tag-label">엔티티 유형</span>
-              <div className="miro-tag-list">{(ontology?.entity_types ?? []).map((tag) => <span className="miro-tag" key={tag}>{tag}</span>)}</div>
+              <div className="miro-tag-list">{ontologyEntityTags.map((tag, index) => <span className="miro-tag" key={`${tag}-${index}`}>{tag}</span>)}</div>
               <span className="miro-tag-label">관계 유형</span>
-              <div className="miro-tag-list">{(ontology?.edge_types ?? []).map((tag) => <span className="miro-tag" key={tag}>{tag}</span>)}</div>
+              <div className="miro-tag-list">{ontologyEdgeTags.map((tag, index) => <span className="miro-tag" key={`${tag}-${index}`}>{tag}</span>)}</div>
               <span className="miro-tag-label">Conflict / Issue Axis</span>
               <div className="miro-tag-list">{hotTopics.map((tag) => <span className="miro-tag" key={tag}>{tag}</span>)}</div>
             </div>
