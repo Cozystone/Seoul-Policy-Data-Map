@@ -180,6 +180,26 @@ export default function SpdmRedesign() {
     intervalsRef.current = [];
   };
 
+  const resetFlowState = () => {
+    creatingSimulationRef.current = false;
+    graphStatRef.current = { nodes: 0, edges: 0 };
+    runLogRef.current = { twitter: 0, reddit: 0 };
+    setOntology(null);
+    setProject(null);
+    setBootstrapTask(null);
+    setGraphTask(null);
+    setResolvedGraphId(null);
+    setGraphData(null);
+    setSimulationId(null);
+    setPrepareStatus(null);
+    setProfilesRealtime(null);
+    setConfigRealtime(null);
+    setRunStatus(null);
+    setRunDetail(null);
+    setIsRunning(false);
+    setIsInitializing(false);
+  };
+
   const loadGraphData = async (graphId: string, flowId: number) => {
     const response = await fetch(`/api/mirofish/graph/data/${graphId}`);
     const json = await response.json();
@@ -292,22 +312,7 @@ export default function SpdmRedesign() {
     flowIdRef.current += 1;
     const flowId = flowIdRef.current;
     clearPollers();
-    creatingSimulationRef.current = false;
-    graphStatRef.current = { nodes: 0, edges: 0 };
-    runLogRef.current = { twitter: 0, reddit: 0 };
-    setOntology(null);
-    setProject(null);
-    setBootstrapTask(null);
-    setGraphTask(null);
-    setResolvedGraphId(null);
-    setGraphData(null);
-    setSimulationId(null);
-    setPrepareStatus(null);
-    setProfilesRealtime(null);
-    setConfigRealtime(null);
-    setRunStatus(null);
-    setRunDetail(null);
-    setIsRunning(false);
+    resetFlowState();
     setIsInitializing(true);
     addLog(`Seed input bootstrap 시작: ${scenario.shortName}`);
 
@@ -344,6 +349,12 @@ export default function SpdmRedesign() {
             setResolvedGraphId(projectData.graph_id);
             void loadGraphData(projectData.graph_id, flowId);
           }
+        }
+        if (!bootstrapJson?.success) {
+          addLog(`Bootstrap task 조회 실패: ${bootstrapTaskId}`);
+          window.clearInterval(graphInterval);
+          setIsInitializing(false);
+          return;
         }
         if (bootstrapJson?.success) {
           const nextBootstrapTask = bootstrapJson.data as MiroFishTask;
@@ -400,6 +411,8 @@ export default function SpdmRedesign() {
     let cancelled = false;
     const scenario = active;
     const controller = new AbortController();
+    clearPollers();
+    resetFlowState();
     setRealtime(null);
     fetch(`/api/seoul/realtime?area=${encodeURIComponent(scenario.realtimeArea)}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
@@ -407,11 +420,8 @@ export default function SpdmRedesign() {
         if (cancelled) return;
         setRealtime(snapshot);
         if (snapshot) addLog(`${snapshot.areaName} 실시간 도시 신호 반영 (${snapshot.source})`);
-        void startBootstrap(scenario, snapshot);
       })
-      .catch(() => {
-        if (!cancelled) void startBootstrap(scenario, null);
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
       controller.abort();
@@ -539,10 +549,15 @@ export default function SpdmRedesign() {
 
         <section className="miro-workbench">
           <div className="miro-step-card">
-            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">01</span><div><span className="miro-step-title">Seed Input</span><p className="miro-step-subtitle">문서 + 예측 질문 + 도시 상태</p></div></div><span className={`miro-badge ${project ? "miro-badge-success" : "miro-badge-processing"}`}>{project ? <Check size={14} /> : null}{project ? "완료" : "진행 중"}</span></div>
+            <div className="miro-step-header"><div className="miro-step-title-group"><span className="miro-step-num">01</span><div><span className="miro-step-title">Seed Input</span><p className="miro-step-subtitle">문서 + 예측 질문 + 도시 상태</p></div></div><span className={`miro-badge ${project ? "miro-badge-success" : isInitializing ? "miro-badge-processing" : "miro-badge-idle"}`}>{project ? <Check size={14} /> : null}{project ? "완료" : isInitializing ? "진행 중" : "대기"}</span></div>
             <div className="miro-step-body">
               <p className="miro-api-note">POST /api/mirofish/bootstrap</p>
               <p className="miro-step-desc">정책 문서, 서울 현재 상태, 예측 목표를 하나의 seed bundle로 묶고 ontology generation을 시작합니다.</p>
+              <div className="miro-step-actions">
+                <button className="miro-primary-btn" type="button" onClick={() => void startBootstrap(active, realtime)} disabled={isInitializing}>
+                  <Play size={14} />시드/그래프 빌드 시작
+                </button>
+              </div>
               <div className="miro-id-grid">
                 <div className="miro-id-item"><span>Scenario</span><strong>{active.name}</strong></div>
                 <div className="miro-id-item"><span>Forecast Question</span><strong>{active.objective}</strong></div>

@@ -11,6 +11,7 @@ Adopt step-by-step generation strategy to avoid failures from generating too lon
 """
 
 import json
+import os
 import math
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field, asdict
@@ -77,6 +78,27 @@ class AgentActivityConfig:
 
     # Influence weight (determines probability of their speech being seen by other agents)
     influence_weight: float = 1.0
+
+    # Scaling metadata
+    cluster_id: str = "default"
+    cluster_role: str = "member"  # leader or member
+    reasoning_weight: float = 0.5
+    rule_profile: str = "balanced"
+    sensitivity_metrics: List[str] = field(default_factory=list)
+    trust_channels: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ReasoningDecimationConfig:
+    """Reasoning budget for local constrained inference."""
+    cluster_count: int = 12
+    cluster_calls_per_round: int = 3
+    agent_calls_per_round: int = 6
+    cooldown_rounds: int = 2
+    rule_agent_share: float = 0.9
+    context_memory_limit: int = 2
+    issue_limit: int = 3
+    max_llm_concurrency: int = 8
 
 
 @dataclass
@@ -164,6 +186,9 @@ class SimulationParameters:
     twitter_config: Optional[PlatformConfig] = None
     reddit_config: Optional[PlatformConfig] = None
 
+    # Local scaling configuration
+    reasoning_config: ReasoningDecimationConfig = field(default_factory=ReasoningDecimationConfig)
+
     # LLM configuration
     llm_model: str = ""
     llm_base_url: str = ""
@@ -185,6 +210,7 @@ class SimulationParameters:
             "event_config": asdict(self.event_config),
             "twitter_config": asdict(self.twitter_config) if self.twitter_config else None,
             "reddit_config": asdict(self.reddit_config) if self.reddit_config else None,
+            "reasoning_config": asdict(self.reasoning_config),
             "llm_model": self.llm_model,
             "llm_base_url": self.llm_base_url,
             "generated_at": self.generated_at,
@@ -325,6 +351,7 @@ class SimulationConfigGenerator:
             all_agent_configs.extend(batch_configs)
         
         reasoning_parts.append(f"Agent config: Successfully generated {len(all_agent_configs)}")
+        all_agent_configs = self._decorate_agent_configs_with_clusters(all_agent_configs)
 
         # ========== Assign initial post agents ==========
         logger.info("Assigning appropriate publisher agents to initial posts...")
@@ -368,6 +395,7 @@ class SimulationConfigGenerator:
             event_config=event_config,
             twitter_config=twitter_config,
             reddit_config=reddit_config,
+            reasoning_config=self._build_reasoning_config(all_agent_configs),
             llm_model=self.model_name,
             llm_base_url=self.base_url,
             generation_reasoning=" | ".join(reasoning_parts)
@@ -895,7 +923,13 @@ Return JSON format (no markdown):
                 response_delay_max=cfg.get("response_delay_max", 60),
                 sentiment_bias=cfg.get("sentiment_bias", 0.0),
                 stance=cfg.get("stance", "neutral"),
-                influence_weight=cfg.get("influence_weight", 1.0)
+                influence_weight=cfg.get("influence_weight", 1.0),
+                cluster_id=self._derive_cluster_id(entity),
+                cluster_role="member",
+                reasoning_weight=self._derive_reasoning_weight(entity, cfg),
+                rule_profile=self._derive_rule_profile(entity),
+                sensitivity_metrics=self._derive_sensitivity_metrics(entity),
+                trust_channels=self._derive_trust_channels(entity),
             )
             configs.append(config)
 
@@ -983,5 +1017,73 @@ Return JSON format (no markdown):
                 "stance": "neutral",
                 "influence_weight": 1.0
             }
+
+    def _derive_cluster_id(self, entity: EntityNode) -> str:
+        entity_type = (entity.get_entity_type() or "unknown").strip() or "unknown"
+        return entity_type.lower()
+
+    def _derive_reasoning_weight(self, entity: EntityNode, cfg: Dict[str, Any]) -> float:
+        influence = float(cfg.get("influence_weight", 1.0))
+        activity = float(cfg.get("activity_level", 0.5))
+        entity_type = (entity.get_entity_type() or "unknown").lower()
+        type_bonus = 0.2 if entity_type in ["governmentagency", "mediaoutlet", "professor", "official"] else 0.0
+        return round(min(1.0, 0.35 + (influence / 3.0) * 0.35 + activity * 0.2 + type_bonus), 3)
+
+    def _derive_rule_profile(self, entity: EntityNode) -> str:
+        entity_type = (entity.get_entity_type() or "unknown").lower()
+        if entity_type in ["governmentagency", "university", "official"]:
+            return "institutional"
+        if entity_type in ["mediaoutlet", "journalist"]:
+            return "media"
+        if entity_type in ["student", "person", "alumni"]:
+            return "grassroots"
+        return "balanced"
+
+    def _derive_sensitivity_metrics(self, entity: EntityNode) -> List[str]:
+        entity_type = (entity.get_entity_type() or "unknown").lower()
+        if entity_type in ["governmentagency", "official"]:
+            return ["acceptance", "backlash", "governance"]
+        if entity_type in ["mediaoutlet", "journalist"]:
+            return ["novelty", "conflict", "amplification"]
+        if entity_type in ["student", "person", "alumni"]:
+            return ["fairness", "cost", "convenience"]
+        return ["acceptance", "attention", "convenience"]
+
+    def _derive_trust_channels(self, entity: EntityNode) -> List[str]:
+        entity_type = (entity.get_entity_type() or "unknown").lower()
+        if entity_type in ["governmentagency", "official"]:
+            return ["official-briefing", "district-notice"]
+        if entity_type in ["mediaoutlet", "journalist"]:
+            return ["newsroom", "social-trends"]
+        if entity_type in ["student", "person", "alumni"]:
+            return ["community", "peer", "social-feed"]
+        return ["social-feed", "news"]
+
+    def _decorate_agent_configs_with_clusters(self, configs: List[AgentActivityConfig]) -> List[AgentActivityConfig]:
+        grouped: Dict[str, List[AgentActivityConfig]] = {}
+        for cfg in configs:
+            grouped.setdefault(cfg.cluster_id, []).append(cfg)
+
+        for cluster_configs in grouped.values():
+            cluster_configs.sort(key=lambda item: (item.reasoning_weight, item.influence_weight, item.activity_level), reverse=True)
+            if cluster_configs:
+                cluster_configs[0].cluster_role = "leader"
+
+        return configs
+
+    def _build_reasoning_config(self, configs: List[AgentActivityConfig]) -> ReasoningDecimationConfig:
+        cluster_count = max(1, len({cfg.cluster_id for cfg in configs}))
+        cluster_calls = min(cluster_count, int(os.environ.get("SPDM_REASONING_CLUSTER_CALLS", "3")))
+        agent_calls = min(len(configs), int(os.environ.get("SPDM_REASONING_AGENT_CALLS", "6")))
+        return ReasoningDecimationConfig(
+            cluster_count=int(os.environ.get("SPDM_CLUSTER_COUNT", str(cluster_count))),
+            cluster_calls_per_round=cluster_calls,
+            agent_calls_per_round=agent_calls,
+            cooldown_rounds=int(os.environ.get("SPDM_REASONING_COOLDOWN_ROUNDS", "2")),
+            rule_agent_share=float(os.environ.get("SPDM_AGENT_RULE_SHARE", "0.9")),
+            context_memory_limit=int(os.environ.get("SPDM_CONTEXT_MEMORY_LIMIT", "2")),
+            issue_limit=int(os.environ.get("SPDM_CONTEXT_ISSUE_LIMIT", "3")),
+            max_llm_concurrency=max(cluster_calls + agent_calls, 1),
+        )
     
 

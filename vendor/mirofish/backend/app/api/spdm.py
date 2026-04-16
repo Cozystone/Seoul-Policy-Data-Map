@@ -17,7 +17,6 @@ from ..config import Config
 from ..models.project import ProjectManager, ProjectStatus
 from ..models.task import TaskManager, TaskStatus
 from ..services.graph_builder import GraphBuilderService
-from ..services.ontology_generator import OntologyGenerator
 from ..services.spdm_seoul_adapter import execute_core_if_requested, write_rehearsal_artifacts
 from ..services.text_processor import TextProcessor
 
@@ -27,6 +26,35 @@ def _get_storage():
     if not storage:
         raise ValueError("GraphStorage not initialized")
     return storage
+
+
+def _build_spdm_ontology():
+    return {
+        "entity_types": [
+            {"name": "Policy", "description": "A Seoul public policy or intervention.", "attributes": [{"name": "policy_name", "type": "text", "description": "Name of the policy"}], "examples": ["JamSil Event Expansion"]},
+            {"name": "Region", "description": "An administrative region in Seoul.", "attributes": [{"name": "region_name", "type": "text", "description": "Name of the region"}], "examples": ["Songpa-gu", "Gangnam-gu"]},
+            {"name": "Place", "description": "A specific place or venue in Seoul.", "attributes": [{"name": "place_name", "type": "text", "description": "Name of the place"}], "examples": ["Jamsil Sports Complex", "COEX"]},
+            {"name": "Organization", "description": "An institution, operator, district office, or business group.", "attributes": [{"name": "org_name", "type": "text", "description": "Name of the organization"}], "examples": ["Seoul Metropolitan Government", "Songpa District Office"]},
+            {"name": "PopulationGroup", "description": "A stakeholder population affected by the policy.", "attributes": [{"name": "group_name", "type": "text", "description": "Name of the group"}], "examples": ["Office Workers", "Small Merchants"]},
+            {"name": "Metric", "description": "A measurable city signal or indicator.", "attributes": [{"name": "metric_name", "type": "text", "description": "Name of the metric"}], "examples": ["Crowding", "Traffic Delay"]},
+            {"name": "Event", "description": "A scheduled or triggered event in the city.", "attributes": [{"name": "event_name", "type": "text", "description": "Name of the event"}], "examples": ["Large concert", "Policy rollout"]},
+            {"name": "Issue", "description": "A contested issue or conflict axis in the policy discussion.", "attributes": [{"name": "issue_name", "type": "text", "description": "Name of the issue"}], "examples": ["Accessibility", "Public acceptance"]},
+            {"name": "Reaction", "description": "A social or public reaction to the policy or event.", "attributes": [{"name": "reaction_name", "type": "text", "description": "Name of the reaction"}], "examples": ["Support", "Backlash"]},
+            {"name": "Document", "description": "A source document or signal used as seed input.", "attributes": [{"name": "document_name", "type": "text", "description": "Name of the document"}], "examples": ["Policy brief", "Realtime city signal summary"]},
+        ],
+        "edge_types": [
+            {"name": "APPLIES_TO", "description": "A policy applies to a region or population.", "source_targets": [{"source": "Policy", "target": "Region"}, {"source": "Policy", "target": "PopulationGroup"}], "attributes": []},
+            {"name": "CONTAINS", "description": "A region contains a place.", "source_targets": [{"source": "Region", "target": "Place"}], "attributes": []},
+            {"name": "OCCURS_AT", "description": "An event occurs at a place.", "source_targets": [{"source": "Event", "target": "Place"}], "attributes": []},
+            {"name": "AFFECTS", "description": "A policy or event affects a metric or issue.", "source_targets": [{"source": "Policy", "target": "Metric"}, {"source": "Event", "target": "Metric"}, {"source": "Policy", "target": "Issue"}], "attributes": []},
+            {"name": "INFLUENCES", "description": "A metric or issue influences a reaction.", "source_targets": [{"source": "Metric", "target": "Reaction"}, {"source": "Issue", "target": "Reaction"}], "attributes": []},
+            {"name": "REACTS_TO", "description": "A population group reacts to a policy or event.", "source_targets": [{"source": "PopulationGroup", "target": "Policy"}, {"source": "PopulationGroup", "target": "Event"}], "attributes": []},
+            {"name": "MENTIONS", "description": "A document mentions an entity.", "source_targets": [{"source": "Document", "target": "Policy"}, {"source": "Document", "target": "Region"}, {"source": "Document", "target": "Place"}, {"source": "Document", "target": "PopulationGroup"}, {"source": "Document", "target": "Metric"}, {"source": "Document", "target": "Event"}, {"source": "Document", "target": "Issue"}, {"source": "Document", "target": "Reaction"}], "attributes": []},
+            {"name": "AMPLIFIES", "description": "An issue amplifies a reaction.", "source_targets": [{"source": "Issue", "target": "Reaction"}], "attributes": []},
+            {"name": "MITIGATES", "description": "An issue or organization mitigates a reaction.", "source_targets": [{"source": "Issue", "target": "Reaction"}, {"source": "Organization", "target": "Reaction"}], "attributes": []},
+        ],
+        "analysis_summary": "SPDM ontology uses a fixed Seoul policy schema so graph-first simulation can start quickly and deterministically."
+    }
 
 
 @spdm_bp.route("/world-seed", methods=["POST"])
@@ -100,12 +128,7 @@ def create_spdm_bootstrap():
                 )
 
                 text = TextProcessor.preprocess_text(policy_document)
-                generator = OntologyGenerator()
-                ontology = generator.generate(
-                    document_texts=[text],
-                    simulation_requirement=simulation_requirement,
-                    additional_context=additional_context if additional_context else None
-                )
+                ontology = _build_spdm_ontology()
 
                 project_state = ProjectManager.get_project(project.project_id)
                 if not project_state:

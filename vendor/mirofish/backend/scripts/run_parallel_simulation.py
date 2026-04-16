@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 OASIS dual-platform parallel simulation preset script
 Run Twitter and Reddit simulations simultaneously with the same configuration file
@@ -17,12 +18,12 @@ Usage:
 
 Log structure:
     sim_xxx/
-    ├── twitter/
-    │   └── actions.jsonl    # Twitter platform action log
-    ├── reddit/
-    │   └── actions.jsonl    # Reddit platform action log
-    ├── simulation.log       # Main simulation process log
-    └── run_state.json       # Run state (for API queries)
+    ?쒋?? twitter/
+    ??  ?붴?? actions.jsonl    # Twitter platform action log
+    ?쒋?? reddit/
+    ??  ?붴?? actions.jsonl    # Reddit platform action log
+    ?쒋?? simulation.log       # Main simulation process log
+    ?붴?? run_state.json       # Run state (for API queries)
 """
 
 # ============================================================
@@ -985,9 +986,9 @@ def create_model(config: Dict[str, Any], use_boost: bool = False):
     """
     Create LLM model
     
-    Support dual LLM configuration for acceleration during parallel simulation：
-    - Common configuration：LLM_API_KEY, LLM_BASE_URL, LLM_MODEL_NAME
-    - Acceleration configuration (optional)：LLM_BOOST_API_KEY, LLM_BOOST_BASE_URL, LLM_BOOST_MODEL_NAME
+    Support dual LLM configuration for acceleration during parallel simulation竊?
+    - Common configuration竊숷LM_API_KEY, LLM_BASE_URL, LLM_MODEL_NAME
+    - Acceleration configuration (optional)竊숷LM_BOOST_API_KEY, LLM_BOOST_BASE_URL, LLM_BOOST_MODEL_NAME
     
     If acceleration LLM is configured, different platforms can use different API providers during parallel simulation to improve concurrency.
     
@@ -1090,6 +1091,123 @@ def get_active_agents_for_round(
     return active_agents
 
 
+def get_agent_config_map(config: Dict[str, Any]) -> Dict[int, Dict[str, Any]]:
+    return {
+        cfg.get("agent_id", idx): cfg
+        for idx, cfg in enumerate(config.get("agent_configs", []))
+    }
+
+
+def get_reasoning_config(config: Dict[str, Any], total_agents: int) -> Dict[str, Any]:
+    reasoning = config.get("reasoning_config", {}) or {}
+    cluster_count = max(1, int(reasoning.get("cluster_count", 12)))
+    cluster_calls = max(1, int(reasoning.get("cluster_calls_per_round", 3)))
+    agent_calls = max(1, int(reasoning.get("agent_calls_per_round", 6)))
+    cooldown_rounds = max(0, int(reasoning.get("cooldown_rounds", 2)))
+    rule_agent_share = max(0.0, min(1.0, float(reasoning.get("rule_agent_share", 0.9))))
+    max_llm_concurrency = max(1, int(reasoning.get("max_llm_concurrency", cluster_calls + agent_calls)))
+    return {
+        "cluster_count": cluster_count,
+        "cluster_calls_per_round": min(cluster_calls, total_agents),
+        "agent_calls_per_round": min(agent_calls, total_agents),
+        "cooldown_rounds": cooldown_rounds,
+        "rule_agent_share": rule_agent_share,
+        "max_llm_concurrency": max_llm_concurrency,
+    }
+
+
+def score_agent_for_reasoning(cfg: Dict[str, Any], round_num: int, last_reasoned_round: Dict[int, int]) -> float:
+    agent_id = cfg.get("agent_id", -1)
+    last_round = last_reasoned_round.get(agent_id, -9999)
+    cooldown_rounds = cfg.get("_cooldown_rounds", 2)
+    cooldown_factor = 0.2 if (round_num - last_round) < cooldown_rounds else 1.0
+    influence = float(cfg.get("influence_weight", 1.0))
+    activity = float(cfg.get("activity_level", 0.5))
+    reasoning_weight = float(cfg.get("reasoning_weight", 0.5))
+    sentiment = abs(float(cfg.get("sentiment_bias", 0.0)))
+    return cooldown_factor * (
+        activity * 0.35 +
+        min(influence / 3.0, 1.0) * 0.30 +
+        reasoning_weight * 0.25 +
+        sentiment * 0.10
+    ) + random.random() * 0.03
+
+
+def select_reasoning_agents(
+    active_agents: List[Tuple[int, Any]],
+    agent_config_map: Dict[int, Dict[str, Any]],
+    reasoning_config: Dict[str, Any],
+    last_reasoned_round: Dict[int, int],
+    round_num: int,
+) -> Tuple[List[Tuple[int, Any]], List[Tuple[int, Any]]]:
+    leader_candidates = []
+    member_candidates = []
+
+    for agent_id, agent in active_agents:
+        cfg = dict(agent_config_map.get(agent_id, {}))
+        cfg["_cooldown_rounds"] = reasoning_config["cooldown_rounds"]
+        score = score_agent_for_reasoning(cfg, round_num, last_reasoned_round)
+        if cfg.get("cluster_role") == "leader":
+            leader_candidates.append((score, agent_id, agent))
+        else:
+            member_candidates.append((score, agent_id, agent))
+
+    leader_candidates.sort(reverse=True, key=lambda item: item[0])
+    member_candidates.sort(reverse=True, key=lambda item: item[0])
+
+    selected_leaders = leader_candidates[: reasoning_config["cluster_calls_per_round"]]
+    selected_members = member_candidates[: reasoning_config["agent_calls_per_round"]]
+
+    reasoning_agents = [(agent_id, agent) for _, agent_id, agent in selected_leaders + selected_members]
+    reasoning_ids = {agent_id for agent_id, _ in reasoning_agents}
+    rule_agents = [(agent_id, agent) for agent_id, agent in active_agents if agent_id not in reasoning_ids]
+    return reasoning_agents, rule_agents
+
+
+def build_rule_post_content(cfg: Dict[str, Any], simulated_hour: int, platform_name: str) -> str:
+    entity_name = cfg.get("entity_name", "Agent")
+    stance = cfg.get("stance", "neutral")
+    cluster_id = str(cfg.get("cluster_id", cfg.get("entity_type", "group"))).replace("_", " ")
+    metrics = cfg.get("sensitivity_metrics", []) or ["crowding", "acceptance"]
+    focus = metrics[simulated_hour % len(metrics)]
+
+    if stance == "supportive":
+        tone = "?꾩옣 ?댁쁺???덉젙?곸씠硫?泥닿컧??醫뗭븘吏????덉뒿?덈떎."
+    elif stance == "opposing":
+        tone = "?앺솢 遺덊렪怨?諛섎컻????而ㅼ쭏 ???덉뒿?덈떎."
+    elif stance == "observer":
+        tone = "異붽? ?곗씠?곗? ?꾩옣 諛섏쓳?????뺤씤?댁빞 ?⑸땲??"
+    else:
+        tone = "?몄씡怨?遺덊렪???숈떆???섑???媛?μ꽦???덉뒿?덈떎."
+
+    if platform_name == "reddit":
+        return f"[{cluster_id}] {entity_name}: {focus} 湲곗??쇰줈 蹂대㈃ {tone}"
+    return f"{entity_name} | {focus} 愿?먯뿉??蹂대㈃ {tone}"
+
+
+def build_rule_actions(
+    rule_agents: List[Tuple[int, Any]],
+    agent_config_map: Dict[int, Dict[str, Any]],
+    platform_name: str,
+    simulated_hour: int,
+) -> Dict[Any, Any]:
+    actions = {}
+    for agent_id, agent in rule_agents:
+        cfg = agent_config_map.get(agent_id, {})
+        post_prob = min(0.18, max(0.03, float(cfg.get("posts_per_hour", 0.5)) / 8.0))
+        if random.random() < post_prob:
+            actions[agent] = ManualAction(
+                action_type=ActionType.CREATE_POST,
+                action_args={"content": build_rule_post_content(cfg, simulated_hour, platform_name)}
+            )
+        else:
+            actions[agent] = ManualAction(
+                action_type=ActionType.DO_NOTHING,
+                action_args={}
+            )
+    return actions
+
+
 class PlatformSimulation:
     """Platform simulation result container"""
     def __init__(self):
@@ -1128,6 +1246,9 @@ async def run_twitter_simulation(
     
     # Twitter use common LLM configuration
     model = create_model(config, use_boost=False)
+    agent_config_map = get_agent_config_map(config)
+    reasoning_config = get_reasoning_config(config, len(agent_config_map))
+    last_reasoned_round: Dict[int, int] = {}
     
     # OASIS Twitter uses CSV format
     profile_path = os.path.join(simulation_dir, "twitter_profiles.csv")
@@ -1156,7 +1277,7 @@ async def run_twitter_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.TWITTER,
         database_path=db_path,
-        semaphore=30,  # Limit maximum concurrent LLM requests to prevent API overload
+        semaphore=reasoning_config["max_llm_concurrency"],
     )
     
     await result.env.reset()
@@ -1229,7 +1350,7 @@ async def run_twitter_simulation(
         # Check if received exit signal
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
-                main_logger.info(f"Received exit signal，at round {round_num + 1} stop simulation")
+                main_logger.info(f"Received exit signal竊똞t round {round_num + 1} stop simulation")
             break
         
         simulated_minutes = round_num * minutes_per_round
@@ -1250,7 +1371,32 @@ async def run_twitter_simulation(
                 action_logger.log_round_end(round_num + 1, 0)
             continue
         
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        reasoning_agents, rule_agents = select_reasoning_agents(
+            active_agents,
+            agent_config_map,
+            reasoning_config,
+            last_reasoned_round,
+            round_num,
+        )
+        for agent_id, _ in reasoning_agents:
+            last_reasoned_round[agent_id] = round_num
+
+        actions = {agent: LLMAction() for _, agent in reasoning_agents}
+        actions.update(build_rule_actions(rule_agents, agent_config_map, "twitter", simulated_hour))
+        round_decision_source = {
+            agent_id: "llm" for agent_id, _ in reasoning_agents
+        }
+        round_decision_source.update({
+            agent_id: "agent_rule" for agent_id, _ in rule_agents
+        })
+
+        if action_logger:
+            action_logger.log_round_budget(
+                round_num + 1,
+                active_agents=len(active_agents),
+                llm_agents=len(reasoning_agents),
+                rule_agents=len(rule_agents),
+            )
         await result.env.step(actions)
         
         # Get actual executed actions from Database and log
@@ -1266,7 +1412,8 @@ async def run_twitter_simulation(
                     agent_id=action_data['agent_id'],
                     agent_name=action_data['agent_name'],
                     action_type=action_data['action_type'],
-                    action_args=action_data['action_args']
+                    action_args=action_data['action_args'],
+                    decision_source=round_decision_source.get(action_data['agent_id'], 'llm')
                 )
                 total_actions += 1
                 round_action_count += 1
@@ -1318,8 +1465,11 @@ async def run_reddit_simulation(
     
     log_info("Initializing...")
     
-    # Reddit use acceleration LLM configuration(if available，otherwise fallback toCommon configuration）
+    # Reddit uses the same decimated reasoning strategy as Twitter.
     model = create_model(config, use_boost=True)
+    agent_config_map = get_agent_config_map(config)
+    reasoning_config = get_reasoning_config(config, len(agent_config_map))
+    last_reasoned_round: Dict[int, int] = {}
     
     profile_path = os.path.join(simulation_dir, "reddit_profiles.json")
     if not os.path.exists(profile_path):
@@ -1347,7 +1497,7 @@ async def run_reddit_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.REDDIT,
         database_path=db_path,
-        semaphore=30,  # Limit maximum concurrent LLM requests to prevent API overload
+        semaphore=reasoning_config["max_llm_concurrency"]
     )
     
     await result.env.reset()
@@ -1428,7 +1578,7 @@ async def run_reddit_simulation(
         # Check if received exit signal
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
-                main_logger.info(f"Received exit signal，at round {round_num + 1} stop simulation")
+                main_logger.info(f"Received exit signal竊똞t round {round_num + 1} stop simulation")
             break
         
         simulated_minutes = round_num * minutes_per_round
@@ -1449,14 +1599,39 @@ async def run_reddit_simulation(
                 action_logger.log_round_end(round_num + 1, 0)
             continue
         
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        reasoning_agents, rule_agents = select_reasoning_agents(
+            active_agents,
+            agent_config_map,
+            reasoning_config,
+            last_reasoned_round,
+            round_num,
+        )
+        for agent_id, _ in reasoning_agents:
+            last_reasoned_round[agent_id] = round_num
+
+        actions = {agent: LLMAction() for _, agent in reasoning_agents}
+        actions.update(build_rule_actions(rule_agents, agent_config_map, "reddit", simulated_hour))
+        round_decision_source = {
+            agent_id: "llm" for agent_id, _ in reasoning_agents
+        }
+        round_decision_source.update({
+            agent_id: "agent_rule" for agent_id, _ in rule_agents
+        })
+
+        if action_logger:
+            action_logger.log_round_budget(
+                round_num + 1,
+                active_agents=len(active_agents),
+                llm_agents=len(reasoning_agents),
+                rule_agents=len(rule_agents),
+            )
         await result.env.step(actions)
-        
+
         # Get actual executed actions from Database and log
         actual_actions, last_rowid = fetch_new_actions_from_db(
             db_path, last_rowid, agent_names
         )
-        
+
         round_action_count = 0
         for action_data in actual_actions:
             if action_logger:
@@ -1465,7 +1640,8 @@ async def run_reddit_simulation(
                     agent_id=action_data['agent_id'],
                     agent_name=action_data['agent_name'],
                     action_type=action_data['action_type'],
-                    action_args=action_data['action_args']
+                    action_args=action_data['action_args'],
+                    decision_source=round_decision_source.get(action_data['agent_id'], 'llm')
                 )
                 total_actions += 1
                 round_action_count += 1
@@ -1654,8 +1830,8 @@ def setup_signal_handlers(loop=None):
     """
     Set signal handlers to ensure proper exit when receiving SIGTERM/SIGINT
     
-    Persistent simulation scenario：Simulation completeafter does not exit，Wait for interview command
-    When receiving termination signal, need to：
+    Persistent simulation scenario竊숾imulation completeafter does not exit竊똚ait for interview command
+    When receiving termination signal, need to竊?
     1. Notify asyncio loop to exit wait
     2. Give program a chance to clean up resources properly (close database, environment, etc.)
     3. Then exit
@@ -1697,3 +1873,7 @@ if __name__ == "__main__":
         except Exception:
             pass
         print("Simulation process exited")
+
+
+
+

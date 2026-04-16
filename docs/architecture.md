@@ -27,6 +27,16 @@ Seoul Policy Reaction Twin is an AGPL prototype built on top of actual MiroFish-
 - `vendor/mirofish/backend/app/api/spdm.py`: `/api/spdm/world-seed` route.
 - `vendor/mirofish/backend/scripts/run_spdm_policy_rehearsal.py`: CLI path for local SPDM rehearsal artifact generation and optional core execution.
 
+### 4. Performance Layer
+
+- `docs/mirofish_scaling_strategy.md`: local 7B-8B execution profile for MiroFish-compatible multi-agent simulation.
+- Core policy:
+  - cluster-first reasoning
+  - agent reasoning decimation
+  - externalized memory
+  - compact JSON context
+  - optional API-only report synthesis
+
 ## Working Flow
 
 1. Input Seoul policy document, city state, CSV-derived metrics, and external reaction signals.

@@ -48,7 +48,8 @@ class PlatformActionLogger:
         action_type: str,
         action_args: Optional[Dict[str, Any]] = None,
         result: Optional[str] = None,
-        success: bool = True
+        success: bool = True,
+        decision_source: Optional[str] = None,
     ):
         """Log an action"""
         entry = {
@@ -61,6 +62,8 @@ class PlatformActionLogger:
             "result": result,
             "success": success,
         }
+        if decision_source:
+            entry["decision_source"] = decision_source
         
         with open(self.log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
@@ -86,6 +89,19 @@ class PlatformActionLogger:
             "actions_count": actions_count,
         }
         
+        with open(self.log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+    def log_round_budget(self, round_num: int, active_agents: int, llm_agents: int, rule_agents: int):
+        entry = {
+            "round": round_num,
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "round_budget",
+            "active_agents": active_agents,
+            "llm_agents": llm_agents,
+            "rule_agents": rule_agents,
+        }
+
         with open(self.log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
     
